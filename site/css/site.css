@@ -16,6 +16,9 @@ img { max-width: 100%; height: auto; display: block; }
 nav { background: var(--navy); border-bottom: 1px solid var(--line); }
 nav .wrap { display: flex; align-items: center; gap: 16px; padding-block: 12px; }
 nav .logo img { height: 30px; width: auto; }
+nav .beta { font: 700 11px/1 var(--display); letter-spacing: .16em; color: var(--lime); border: 1px solid var(--lime); border-radius: 999px; padding: 4px 8px 3px; margin-left: -6px; }
+.hero p.betanote { margin: 0; font-size: 15px; color: var(--muted); }
+.hero p.betanote b { color: var(--lime); font-weight: 600; }
 nav .links { margin-left: auto; display: flex; gap: 18px; font: 700 15px/1 var(--display); letter-spacing: .08em; text-transform: uppercase; }
 nav .links a { color: var(--muted); text-decoration: none; }
 nav .links a:hover { color: var(--ink); }

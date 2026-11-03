@@ -1,5 +1,8 @@
 ﻿# FantasyTV
 
+> **Public beta.** FantasyTV works, but it's new and tested on a handful of TVs and phones. Expect rough edges, and
+> please report what breaks in [Issues](https://github.com/wasuhz/FantasyTV/issues). The app installs fixes itself.
+
 **NFL RedZone, but for your own fantasy teams.** FantasyTV is an Android app, for TVs and for phones (foldables
 included), for people who watch football through IPTV (Dispatcharr or an Xtream Codes login). It follows your fantasy leagues, finds the games your players are in on
 your own channels, and switches to the one most likely to score you points, with your live fantasy scores on screen.

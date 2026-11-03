@@ -12,6 +12,12 @@
 <link rel="stylesheet" href="tv.css">
 <style>
   #stage { background: #000 url(img/play.jpg) center / cover no-repeat; }
+  /* changing channels: a blink of black under the overlay, which stays */
+  #cut { position: absolute; inset: 0; background: #000; opacity: 0; transition: opacity .16s; pointer-events: none; }
+  #cut.on { opacity: 1; }
+  #countdown .row > .mk .logo-mark { border-radius: 14px; }
+  .pop.target { outline: 4px solid #fff; outline-offset: 2px; }
+  .card .p .gain { font: italic 800 30px/1 var(--mono); color: var(--lime); }
   /* tour mode: the remote's OK key lights up as each step goes by */
   #tour .nav b { display: inline-block; transition: transform .15s, background .15s; border-radius: 8px; padding: 2px 6px; margin-left: -6px; }
   #tour .nav b.press { transform: scale(1.25); background: var(--cyan); color: #fff; }
@@ -19,9 +25,13 @@
 </style>
 </head>
 <body>
-<!-- What the TV shows during a real touchdown: D'Andre Swift's 5-yard run, Bears at Seahawks, Monday night.
-     The page runs as a loop on fantasytvapp.com (in the hero): his card and your scores count up as he scores. -->
+<!-- AutoTune at work, as a loop for fantasytvapp.com's hero: watching Chiefs at Broncos, a countdown switches to Bears
+     at Seahawks for D'Andre Swift's touchdown (his card and your scores count up), then a popup from Vikings at Lions
+     (Jahmyr Gibbs, 30-yard TD run) and OK switches there. The markup below is the Bears game; the others are drawn. -->
 <div id="stage">
+  <div id="cut"></div>
+  <div id="countdown"><div class="row"><div class="mk"><img class="logo-mark" src="/img/icon-192.png" alt=""></div><div class="lbl">SWITCHING<br>TO</div>
+    <div class="teams"></div><div class="why"></div><div class="secs mono">5.0</div><button class="cancel">CANCEL</button></div><div class="prog"><i></i></div></div>
   <div id="lower">
     <div id="atTag">AUTOTUNE <b>ON</b><span class="k">▲</span></div>
     <div id="bug"><div class="in rzbeat">
@@ -125,23 +135,129 @@ function pop(html, color) {
   setTimeout(() => { el.classList.remove('on'); setTimeout(() => el.remove(), 500); }, 5200);
 }
 
+// ---- The other games, drawn like the TV draws them.
+const HEART = on => `<svg viewBox="0 0 24 24" width="18" height="18"><path d="M12 21s-7.5-4.6-9.6-9.2C.9 8.4 3 4.5 6.7 4.5c2.1 0 3.6 1.2 5.3 3.2 1.7-2 3.2-3.2 5.3-3.2 3.7 0 5.8 3.9 4.3 7.3C19.5 16.4 12 21 12 21z" fill="${on ? '#ff4d57' : 'none'}" stroke="${on ? '#ff4d57' : 'currentColor'}" stroke-width="1.8"/></svg>`;
+const bars = n => `<span class="bars s${n}"><i></i><i></i><i></i><i></i><i></i></span>`;
+const LOGO = id => `https://a.espncdn.com/i/teamlogos/nfl/500-dark/${id}.png`;
+const HEAD = id => `https://a.espncdn.com/i/headshots/nfl/players/full/${id}.png`;
+const tos = '<span class="tos"><i class="on"></i><i class="on"></i><i class="on"></i></span>';
+function bugHtml(g) {
+  const side = (t, home) => `<div class="t${home ? ' home' : ''}" style="--team:${t.color}"><img src="${LOGO(t.id)}" alt="${t.abbr}"><span class="tr"><small>${t.rec}</small>${tos}</span></div>`;
+  const score = t => `<div class="s${t.poss ? ' poss' : ''}">${t.score}</div>`;
+  return `<div class="drive${g.rz ? ' rz' : ''}" style="--team:${(g.away.poss ? g.away : g.home).color}"><i style="width:${g.drive}%"></i><b style="left:${g.drive}%"></b></div>`
+    + side(g.away) + score(g.away)
+    + `<div class="c clk"><span class="c q cap">${g.q}</span><span class="tm">${g.clock}</span></div>`
+    + `<div class="c dd cap ${g.dd}" id="down">${g.down}</div>` + score(g.home) + side(g.home, true);
+}
+function cardsHtml(list) {
+  return list.map(p => `<div class="card${p.lead ? ' lead' : ''}${p.td ? ' td' : ''}">${p.fire ? '<span class="fire corner">🔥</span>' : ''}
+    <img class="hs" src="${HEAD(p.id)}" alt="">
+    <div class="nm">${p.lead ? HEART(false) : ''}${p.name} <span class="pos">${p.pos}</span></div>
+    <div class="st ${p.stc || ''}">${p.game ? `<span class="gm">${p.game}</span>` : ''}● ${p.st}</div>
+    <div class="p"><b><span>${p.pts}</span></b>${p.gain ? `<em class="gain">+${p.gain}</em>` : ''}<small>${p.proj} proj</small></div>
+    <div class="ln">${p.ln}</div></div>`).join('');
+}
+const T = {
+  KC: { abbr: 'KC', id: 'kc', color: '#e31837', rec: '5-2' }, DEN: { abbr: 'DEN', id: 'den', color: '#fb4f14', rec: '6-2' },
+  MIN: { abbr: 'MIN', id: 'min', color: '#4f2683', rec: '6-1' }, DET: { abbr: 'DET', id: 'det', color: '#0076b6', rec: '5-2' },
+  CHI: { abbr: 'CHI', id: 'chi', color: '#0b162a' }, SEA: { abbr: 'SEA', id: 'sea', color: '#002244' },
+};
+const DEN = { bg: 'img/den.jpg', flash: '#fb4f14',
+  bug: bugHtml({ away: { ...T.KC, score: 14 }, home: { ...T.DEN, score: 6, poss: true }, q: '2ND', clock: '1:19', dd: 'blue', down: '3rd &amp; 6 · KC 31', drive: 69 }),
+  cards: cardsHtml([
+    { lead: true, id: 4426338, name: 'B. Nix', pos: 'QB', stc: 'on', st: 'On field', pts: '12.8', proj: '18.2', ln: '13/21 · 151 YD · 1 TD' },
+    { id: 3128429, name: 'C. Sutton', pos: 'WR', stc: 'on', st: 'On field', pts: '7.3', proj: '12.6', ln: '3/4 REC · 43 YD' },
+    { id: 15847, name: 'T. Kelce', pos: 'TE', st: 'Off field', pts: '8.2', proj: '10.4', ln: '4/5 REC · 52 YD' },
+    { id: 4567048, name: 'K. Walker III', pos: 'RB', st: 'Off field', pts: '9.4', proj: '13.1', ln: '14-52 RUSH · 2/2 REC · 14 YD' }]) };
+const DET = { bg: 'img/det.jpg', flash: '#0076b6',
+  bug: bugHtml({ away: { ...T.MIN, score: 7 }, home: { ...T.DET, score: 12, poss: true }, q: '2ND', clock: '4:31', dd: 'gold', down: 'TOUCHDOWN', drive: 100 }),
+  cards: cardsHtml([
+    { lead: true, td: true, fire: true, id: 4429795, name: 'J. Gibbs', pos: 'RB', stc: 'on', st: 'On field', pts: '24.3', gain: '9.0', proj: '17.8', ln: '17-127 RUSH · 1 TD' },
+    { id: 4374302, name: 'A. St. Brown', pos: 'WR', stc: 'on', st: 'On field', pts: '9.6', proj: '15.9', ln: '5/6 REC · 36 YD' },
+    { id: 4426388, name: 'J. Williams', pos: 'WR', st: 'Off field', pts: '8.2', proj: '11.3', ln: '3/5 REC · 52 YD' },
+    { id: 4036133, name: 'T.J. Hockenson', pos: 'TE', st: 'Off field', pts: '11.8', proj: '9.7', ln: '3/4 REC · 46 YD · 1 TD' }]) };
+// Your leagues across the loop: before Swift's touchdown, after it, and after Gibbs's.
+const AFTER_GIBBS = { meA: 114.0, wpA: 79, meB: 128.2, wpB: 95 };
+
+const bugIn = document.querySelector('#bug .in'), cardsEl = document.querySelector('#rail .cards');
+const CHI = { bg: 'img/play.jpg', flash: '#c83803', bug: bugIn.innerHTML, cards: cardsEl.innerHTML };
+for (const s of [DEN, DET]) new Image().src = s.bg;   // ready before their turn
+function scene(s) {
+  stage.style.backgroundImage = `url(${s.bg})`;
+  bugIn.classList.remove('rzbeat');
+  bugIn.innerHTML = s.bug;
+  cardsEl.innerHTML = s.cards;
+  document.getElementById('rail').style.setProperty('--flash', s.flash);
+}
+// A channel change: the picture blinks to black and comes back on the new game; your overlay stays up.
+async function cut(s) {
+  const c = document.getElementById('cut');
+  c.classList.add('on'); await wait(170);
+  scene(s); await wait(140);
+  c.classList.remove('on'); await wait(170);
+}
+// The countdown before a switch, counting down from 5 (faster than the TV, for the loop).
+async function countdown(why) {
+  const cd = document.getElementById('countdown'), secs = cd.querySelector('.secs'), bar = cd.querySelector('.prog i');
+  cd.querySelector('.teams').innerHTML = `<b style="background:${T.CHI.color}"><img src="${LOGO('chi')}" alt="CHI"></b><span class="muted">@</span>`
+    + `<b style="background:${T.SEA.color}"><img src="${LOGO('sea')}" alt="SEA"></b><span style="margin-left:auto;display:flex;gap:16px;align-items:center">${HEART(true)}${bars(5)}</span>`;
+  cd.querySelector('.why').textContent = why;
+  cd.classList.add('on');
+  const t0 = performance.now(), ms = 3000;
+  await new Promise(done => {
+    const step = now => {
+      const f = Math.min(1, (now - t0) / ms);
+      secs.textContent = (5 * (1 - f)).toFixed(1);
+      bar.style.width = `${f * 100}%`;
+      f < 1 ? requestAnimationFrame(step) : done();
+    };
+    requestAnimationFrame(step);
+  });
+  cd.classList.remove('on');
+}
+function rollTo(from, to, ms) {
+  const t0 = performance.now();
+  return new Promise(done => {
+    const step = now => {
+      const f = Math.min(1, (now - t0) / ms), e = 1 - Math.pow(1 - f, 3), v = {};
+      for (const k in to) v[k] = from[k] + (to[k] - from[k]) * e;
+      show(v);
+      f < 1 ? requestAnimationFrame(step) : done();
+    };
+    requestAnimationFrame(step);
+  });
+}
+
 async function loop() {
-  const rail = document.getElementById('rail'), swift = document.getElementById('swift'), bug = document.querySelector('#bug .in'),
-    down = document.getElementById('down'), td = document.getElementById('tdBanner');
+  const rail = document.getElementById('rail'), td = document.getElementById('tdBanner'), pops = document.getElementById('pops');
+  const leagues = v => ({ meA: v.meA, wpA: v.wpA, meB: v.meB, wpB: v.wpB });
   for (;;) {
-    show(BEFORE);
-    swift.classList.remove('td'); rail.classList.remove('td'); td.classList.remove('on');
-    bug.classList.add('rzbeat'); down.className = 'c dd cap rz'; down.textContent = '1st & Goal · SEA 5';
-    await wait(2600);
-    // Touchdown: the banner, the bar flashes in Bears colours, his card lights up and everything counts up.
+    // 1. Watching the Broncos and Chiefs. Swift gets to the 5 in Seattle: AutoTune counts down and switches.
+    scene(DEN); rail.classList.remove('td'); td.classList.remove('on'); pops.innerHTML = '';
+    show(leagues(BEFORE));
+    await wait(2200);
+    await countdown('Your RB · D. Swift · 1st & Goal at SEA 5');
+    await cut(CHI);
+    // 2. Bears at Seahawks: he scores. The banner, the bar flashes in Bears colours, his card lights up, it all counts up.
+    const swift = document.getElementById('swift'), bug = document.querySelector('#bug .in'), down = document.getElementById('down');
+    show(BEFORE); bug.classList.add('rzbeat');
+    await wait(1900);
     restart(td, 'on'); restart(rail, 'td'); swift.classList.add('td');
     bug.classList.remove('rzbeat'); down.className = 'c dd cap gold'; down.textContent = 'TOUCHDOWN';
     await roll(1600);
-    await wait(2400);
-    pop('<b class="pts">+4.1</b><span class="who">J. Jacobs <em>· 22-yd run</em></span><span class="ok">OK · WATCH</span>', '#203731');
-    await wait(2800);
+    await wait(1700);
+    // 3. Gibbs breaks a 30-yard touchdown in Detroit: a popup slides in, OK takes you there.
     td.classList.remove('on');
-    await wait(3200);
+    pop('<b class="pts">TD +9.0</b><span class="who">J. Gibbs <em>· 30-yd run, TOUCHDOWN</em></span><span class="ok">OK · WATCH</span>', T.DET.color);
+    await wait(1700);
+    const p = pops.querySelector('.pop'); if (p) p.classList.add('target');
+    await wait(700);
+    pops.innerHTML = '';
+    await cut(DET);
+    restart(rail, 'td');
+    await rollTo(leagues(AFTER), AFTER_GIBBS, 1400);
+    await wait(3000);
+    await cut(DEN);
   }
 }
 // ---- Tour mode (demo/?tour): the TV's first-launch remote tour, stepping on its own as if you pressed OK.
@@ -163,8 +279,6 @@ const TOUR = [
   { key: '📱', qr: true, title: 'Your phone is the remote',
     text: 'Scan this code with your phone: settings, the channel for each game, rewind and more. It\'s also at the bottom of the game list (Down). Enjoy the games!' },
 ];
-const HEART = on => `<svg viewBox="0 0 24 24" width="18" height="18"><path d="M12 21s-7.5-4.6-9.6-9.2C.9 8.4 3 4.5 6.7 4.5c2.1 0 3.6 1.2 5.3 3.2 1.7-2 3.2-3.2 5.3-3.2 3.7 0 5.8 3.9 4.3 7.3C19.5 16.4 12 21 12 21z" fill="${on ? '#ff4d57' : 'none'}" stroke="${on ? '#ff4d57' : 'currentColor'}" stroke-width="1.8"/></svg>`;
-const bars = n => `<span class="bars s${n}"><i></i><i></i><i></i><i></i><i></i></span>`;
 // The game list, as the TV draws it: the game on screen first, then the rest of your games.
 const RADAR = [
   { cls: 'cur focus', sig: 5, a: 'CHI', sc: '20–17', h: 'SEA', fav: true, sub: 'Q4 8:28 · 1st &amp; Goal at SEA 5<span class="tag red">Red zone · CHI</span>',

@@ -17,14 +17,14 @@
 </head>
 <body>
 <nav><div class="wrap">
-  <a class="logo" href="/"><img src="/img/wordmark.png" alt="FantasyTV" width="180" height="30"></a>
+  <a class="logo" href="/"><img src="/img/wordmark.png" alt="FantasyTV" width="180" height="30"></a><span class="beta" title="FantasyTV is in public beta">BETA</span>
   <div class="links"><a href="#features" class="hide-sm">Features</a><a href="#install">Install</a><a href="/remote">Remote</a></div>
 </div></nav>
 
 <header class="hero"><div class="wrap">
   <div class="kicker">One app for your TV and your phone</div>
   <ul class="works">
-    <li><b>Devices</b><span>Android TV · Google TV · Android phones &amp; Folds</span></li>
+    <li><b>Devices</b><span>Android TV · Google TV · Android phones · <i>works well on Galaxy Fold</i></span></li>
     <li><b>Leagues</b><span>Sleeper · ESPN · <i>Yahoo coming soon</i></span></li>
     <li><b>Streams</b><span>Dispatcharr · Xtream Codes IPTV</span></li>
   </ul>
@@ -32,9 +32,10 @@
   <p class="vs">Regular RedZone chases the league's best plays. FantasyTV chases <b>yours</b>.</p>
   <p>FantasyTV watches every live NFL game for you and switches your TV (or your phone) to the one your players are about to score in, on your own IPTV channels, with your live fantasy scores on screen. Nothing is spoiled: everything waits for your stream.</p>
   <div class="cta"><a class="btn primary" href="#install">Install</a><a class="btn" href="/remote">Open my remote</a></div>
+  <p class="betanote"><b>Public beta.</b> FantasyTV is new and still growing: expect a rough edge or two, and tell us what breaks on <a href="https://github.com/wasuhz/FantasyTV/issues">GitHub</a>. It updates itself as fixes land.</p>
   <figure class="shot demo">
-    <iframe src="/demo/" title="FantasyTV during a touchdown: the game, the score bug, and your players' live fantasy points counting up" loading="lazy" scrolling="no" tabindex="-1"></iframe>
-    <figcaption>D'Andre Swift scores at Seattle and your points count up as it airs. Game image: ESPN.</figcaption>
+    <iframe src="/demo/room.html" title="AutoTune at work, on a TV in a living room: from Chiefs at Broncos it counts down and switches to D'Andre Swift's touchdown at Seattle, your points count up, then a popup takes you to Jahmyr Gibbs's touchdown in Detroit" loading="lazy" scrolling="no" tabindex="-1"></iframe>
+    <figcaption>AutoTune at work: Chiefs at Broncos, then a switch to D'Andre Swift's touchdown at Seattle, then Jahmyr Gibbs scores in Detroit. Game images: ESPN.</figcaption>
   </figure>
 </div></header>
 
@@ -92,6 +93,7 @@
 
   <section id="faq">
     <div class="seg"><h2>Questions</h2></div>
+    <details><summary>Is FantasyTV finished?</summary><p>Not yet: it's in public beta. Everything on this page works, but it's tested on a handful of TVs and phones, so some setups will find bugs we haven't. Report them on <a href="https://github.com/wasuhz/FantasyTV/issues">GitHub</a>; the app installs fixes on its own.</p></details>
     <details><summary>Which download is for my TV, and which for my phone?</summary><p>They're the same: one app, one code (1790534). It sees what it's running on and sets itself up for it: on a TV, your phone becomes the remote; on a phone, touch controls and layouts for the phone, folded or not.</p></details>
     <details><summary>Does it work on iPhone?</summary><p>Not yet. FantasyTV is Android only: Android TV, Google TV and Android phones and tablets. An iPhone still works as the remote for a FantasyTV TV, in its browser.</p></details>
     <details><summary>Where do my logins go?</summary><p>Only onto your own TV or phone. There's no FantasyTV account and no FantasyTV server: the app talks to your IPTV provider, ESPN, Sleeper and GitHub (for updates), and nothing else. On a phone, its settings can't be reached from the Wi-Fi it's on, not even at a coffee shop.</p></details>
@@ -103,7 +105,7 @@
 </div></main>
 
 <footer><div class="wrap">
-  <span>FantasyTV · not affiliated with the NFL, ESPN, Sleeper or Yahoo</span>
+  <span>FantasyTV (beta) · not affiliated with the NFL, ESPN, Sleeper or Yahoo</span>
   <a href="/privacy">Privacy</a>
   <a href="https://github.com/wasuhz/FantasyTV">Source code</a>
 </div></footer>
