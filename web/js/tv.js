@@ -586,7 +586,7 @@ function playStream(url) {
   const v = $('#video');
   if (native) {
     // Rewind off: straight from the server. Smooth playback (tunneling) off: only if Settings says so.
-    native.play(url + (rewindOn() ? '' : '#norewind') + (settings.tunnel === false ? '#notunnel' : ''));
+    native.play(url + (rewindOn() ? '' : '#norewind') + (tunnelOn() ? '' : '#notunnel'));
     setVideo(true);
   } else if (window.mpegts && mpegts.isSupported()) {
     player = mpegts.createPlayer({ type: 'mpegts', isLive: true, url: location.origin + proxied(url) },
@@ -642,6 +642,12 @@ let behind = 0, rewindAsked = 0;
 /** Rewind seconds more on the main picture (0 = back to live). */
 // Rewind: on unless turned off in Settings, and off by default on a lower-powered TV (it made the picture stutter there).
 const rewindOn = () => settings.rewind ?? !(native && native.lowPower && native.lowPower());
+// Smooth playback (tunneling): video straight from the decoder to the screen. Smooth on slower TVs, but the picture
+// can't be read then (game clock, channel delay, commercials), so it's on by default only on a lower-powered TV; a
+// stronger one (Shield) plays smoothly without it and keeps reading the picture.
+const tunnelOn = () => settings.tunnel ?? !!(native && native.lowPower && native.lowPower());
+// Settings (for development): save the clean score-bug strip every 3 s, to build a reader for each network's digits.
+if (native && native.captureBugs) native.captureBugs(!!settings.captureBugs);
 function rewindBy(seconds) {
   if (!native) return;
   if (!rewindOn()) { if (seconds > 0) toast('Rewind is off on this TV: turn it on in phone Settings'); return; }
@@ -834,7 +840,7 @@ function publish() {
     playStats, popupsWaiting: popups.length, ad: { misses: bugMisses, game: bugGame, on: auto.adOn }, readClock, channelDelays: settings.channelDelays || {}, delaySamples,
     matchups: matchupsNow(), channels: channelMap, channelNames, iptv: !!iptv, bigPlays: bigPlays.map(b => ({ game: b.game, at: b.at, who: b.who ? b.who.short : b.team, td: b.td, yards: b.yards })),
     log: auto.log.slice(0, 12), delay: settings.delay, away, rosterAt, out: prefs.out,
-    hideSpoilers: settings.hideSpoilers !== false, rewind: rewindOn(), waiting: !!(auto.pending && auto.pending.waiting),
+    hideSpoilers: settings.hideSpoilers !== false, rewind: rewindOn(), tunnel: tunnelOn(), waiting: !!(auto.pending && auto.pending.waiting),
     games: ranked.map(g => ({ id: g.id, away: g.away, home: g.home, state: g.state, statusName: g.statusName, period: g.period,
       clock: g.clock, start: g.start, network: g.network, sit: g.sit, onBreak: g.onBreak, breakWhy: g.breakWhy, signal: g.signal,
       value: g.value, fav: g.fav, skip: g.skip, players: g.players })),

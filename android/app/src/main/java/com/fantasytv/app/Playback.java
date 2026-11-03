@@ -16,7 +16,9 @@ import androidx.media3.common.MediaItem;
 import androidx.media3.common.PlaybackException;
 import androidx.media3.common.Player;
 import androidx.media3.common.util.UnstableApi;
+import androidx.media3.datasource.DataSource;
 import androidx.media3.datasource.DefaultHttpDataSource;
+import androidx.media3.datasource.TeeDataSource;
 import androidx.media3.exoplayer.DefaultLoadControl;
 import androidx.media3.exoplayer.DefaultRenderersFactory;
 import androidx.media3.exoplayer.ExoPlayer;
@@ -61,6 +63,8 @@ final class Playback {
     private final DefaultTrackSelector tracks;
     private boolean tunnel = true;   // the main picture: tunneled unless Settings turns it off ("#notunnel")
     private final DefaultHttpDataSource.Factory http;
+    /** The main picture's last few seconds of stream, for reading the clock off a frame (null on the split-screen side). */
+    final StreamTap tap;
     private final DefaultExtractorsFactory extractors;
     private final int originalMode;
     private String url;
@@ -82,6 +86,7 @@ final class Playback {
         activity = a;
         listener = l;
         this.side = side;
+        tap = side ? null : new StreamTap(a.getCacheDir());
         originalMode = a.getWindow().getAttributes().preferredDisplayModeId;
 
         DefaultLoadControl load = new DefaultLoadControl.Builder()
@@ -140,6 +145,9 @@ final class Playback {
         main.postDelayed(this::watch, 2_000);
     }
 
+    /** Whether the picture goes straight to the display (then it can't be copied off the screen: use the tap). */
+    boolean tunneled() { return tunnel; }
+
     void play(String newUrl) {
         if (newUrl == null) return;
         // "#norewind" on the end: Rewind is off in settings, so the channel plays straight from the server (less work
@@ -149,6 +157,7 @@ final class Playback {
         boolean noRewind = newUrl.endsWith("#norewind");
         if (noRewind) newUrl = newUrl.substring(0, newUrl.length() - "#norewind".length());
         tunnel = !side && !noTunnel;
+        if (tap != null) tap.reset();   // a new channel: the old one's bytes are no use
         url = newUrl;
         retries = 0;
         back = 0;
@@ -229,7 +238,9 @@ final class Playback {
                     .setAllowChunklessPreparation(true)
                     .createMediaSource(item);
         }
-        return new ProgressiveMediaSource.Factory(http, extractors).createMediaSource(item);
+        // The main picture's bytes are also copied into the tap as they arrive (for the clock reader's frames).
+        DataSource.Factory from = tap == null ? http : () -> new TeeDataSource(http.createDataSource(), tap);
+        return new ProgressiveMediaSource.Factory(from, extractors).createMediaSource(item);
     }
 
     /** Live streams drop now and then: reconnect after 1, 2, 4… up to 15 seconds. */

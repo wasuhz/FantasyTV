@@ -56,5 +56,6 @@ dependencies {
     implementation 'androidx.media3:media3-exoplayer-hls:1.4.1'
     // Reads the game clock off the broadcast (ClockReader). The model ships inside the APK (about 4 MB): Play services'
     // on-demand download never finished on the Shield.
+    // Text recognition bundled in the app (Play services' copy isn't available on Android TV: "unknown feature vision.ocr").
     implementation 'com.google.mlkit:text-recognition:16.0.1'
 }

@@ -20,6 +20,7 @@
         <receiver android:name=".Updater$Receiver" android:exported="false" />
         <activity
             android:name=".MainActivity"
+            android:banner="@drawable/banner"
             android:exported="true"
             android:launchMode="singleTask"
             android:screenOrientation="landscape"
@@ -30,5 +31,7 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <!-- Google's text recognition in a process of its own: if it crashes on a TV's chip, FantasyTV carries on -->
+        <service android:name=".OcrService" android:process=":ocr" android:exported="false" />
     </application>
 </manifest>

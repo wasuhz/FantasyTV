@@ -69,7 +69,7 @@ public class MainActivity extends Activity {
         sidePlayback = new Playback(this, sideSurface, state -> {
             if (state.equals("dead")) web.evaluateJavascript("window.ftvSide && ftvSide('dead')", null);
         }, true);
-        clock = new ClockReader(this, surface, (period, seconds, logo, at) -> main.post(() ->
+        clock = new ClockReader(this, surface, playback, (period, seconds, logo, at) -> main.post(() ->
                 web.evaluateJavascript("window.ftvClock && ftvClock(" + period + "," + seconds + "," + at + "," + logo + ")", null)));
 
         WebView.setWebContentsDebuggingEnabled(true);
@@ -117,6 +117,8 @@ public class MainActivity extends Activity {
         @JavascriptInterface public String version() { return BuildConfig.VERSION_NAME; }
         /** False when this TV can't read the game clock off the picture (its chip crashed Google's text recognition). */
         @JavascriptInterface public boolean clockWorks() { return clock.works(); }
+        /** Settings: save score-bug samples (the clean bottom strip, every 3 s) for building a digit reader. */
+        @JavascriptInterface public void captureBugs(boolean on) { clock.setCapture(on); }
         /**
          * A lower-powered TV (a 32-bit chip, or under 2.5 GB of memory): the 60-second rewind buffer costs it enough to
          * make the picture stutter, so Rewind starts off there (it can still be turned on in Settings).

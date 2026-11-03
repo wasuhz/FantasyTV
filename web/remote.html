@@ -162,7 +162,8 @@
     <label class="chk">Hide spoilers for current game<input type="checkbox" name="hideSpoilers"></label>
     <small>The game on the TV shows no score or points here, since your phone is ahead of the stream.</small>
     <label class="chk">Split screen when two of your drives are hot at once<input type="checkbox" name="splitScreen"></label>
-    <label class="chk">Smooth playback (tunneled video, like TiviMate). Turn off only if a TV shows no picture or the sound drifts<input type="checkbox" name="tunnel"></label>
+    <label class="chk">Smooth playback (tunneled video, like TiviMate). On by default on slower TVs; it stops the TV reading the game clock and commercials off the picture<input type="checkbox" name="tunnel"></label>
+    <label class="chk">Save score-bug samples (for development: helps FantasyTV learn to read each network's clock)<input type="checkbox" name="captureBugs"></label>
     <label class="chk">Rewind (the last minute, for instant replays). Off by default on slower TVs, where it can make the picture stutter<input type="checkbox" name="rewind"></label>
     <small>The game on screen moves left (with its sound), the other plays muted on the right, until it cools off. Uses a second stream from your IPTV. The ⧉ button on a game card splits with it yourself.</small>
     <label class="chk">Matchup scores on the TV (you vs your opponent, each league)<input type="checkbox" name="showMatchups"></label>
@@ -413,14 +414,14 @@ document.getElementById('pCancel').onclick = () => { link.send({ type: 'cancel' 
 // Settings live on the TV (/api/config); saving restarts the TV page with them.
 const form = document.getElementById('settings');
 const DEFAULTS = { sleeper: '', mode: 'live', delay: 30, cooldown: 75, iptvBase: '', xtServer: '', xtUser: '', xtPass: '',
-  hideSpoilers: true, showOpp: true, lookahead: true, pointsPopups: true, swingAlerts: true, dangerAlerts: false, injuryAlerts: true, popupTiming: 'now', popupDelay: 25, autoUpdate: false, splitScreen: true, showMatchups: true, oppWeight: 0, favTeams: '', blackout: '', skipLeagues: [], tracked: [], espnLeagues: [] };
+  hideSpoilers: true, showOpp: true, lookahead: true, pointsPopups: true, swingAlerts: true, dangerAlerts: false, injuryAlerts: true, popupTiming: 'now', popupDelay: 25, autoUpdate: false, splitScreen: true, showMatchups: true, oppWeight: 0, favTeams: '', blackout: '', skipLeagues: [], tracked: [], espnLeagues: [], captureBugs: false };
 let cfg = { ...DEFAULTS };
 document.getElementById('gear').onclick = async () => {
   if (!form.hidden) { form.hidden = true; return; }
   try { cfg = Object.assign({}, DEFAULTS, await (await fetch('/api/config', { cache: 'no-store' })).json()); } catch { cfg = { ...DEFAULTS }; }
   for (const el of form.elements) {
     if (!el.name) continue;
-    if (el.type === 'checkbox') el.checked = el.name === 'rewind' ? cfg.rewind ?? (state ? state.rewind !== false : true) : cfg[el.name] !== false;   // rewind: off by default on slower TVs
+    if (el.type === 'checkbox') el.checked = el.name === 'rewind' || el.name === 'tunnel' ? cfg[el.name] ?? (state ? state[el.name] !== false : true) : cfg[el.name] !== false;   // rewind and smooth playback: their default depends on the TV
     else el.value = cfg[el.name] ?? '';
   }
   cfg.channelRules = Object.assign({ games: {}, teams: {}, networks: {} }, cfg.channelRules || {});

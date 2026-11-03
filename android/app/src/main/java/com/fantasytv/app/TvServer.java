@@ -157,7 +157,21 @@ final class TvServer {
                 case "/yahoo/done":   // back from Yahoo through the return page: finish the sign-in here, then the remote
                     yahooDone(out, query);
                     break;
+                case "/api/bugs": {   // the saved score-bug samples (Settings: save score-bug samples), newest last
+                    File[] all = new File(context.getFilesDir(), "bugs").listFiles();
+                    StringBuilder j = new StringBuilder("[");
+                    if (all != null) {
+                        java.util.Arrays.sort(all, (a, b) -> a.getName().compareTo(b.getName()));
+                        for (File f : all) j.append(j.length() > 1 ? "," : "").append('"').append(f.getName()).append('"');
+                    }
+                    send(out, 200, "application/json", j.append(']').toString().getBytes(StandardCharsets.UTF_8));
+                    break;
+                }
                 default:
+                    if (path.startsWith("/bugs/") && path.matches("/bugs/\\d+\\.jpg")) {   // one sample (digits only: no other files)
+                        File f = new File(new File(context.getFilesDir(), "bugs"), path.substring(6));
+                        if (f.isFile()) { send(out, 200, "image/jpeg", Files.readAllBytes(f.toPath())); break; }
+                    }
                     asset(out, path);
             }
         } catch (Exception e) {
