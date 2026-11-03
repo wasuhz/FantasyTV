@@ -1,0 +1,60 @@
+plugins { id 'com.android.application' }
+
+android {
+    namespace 'com.fantasytv.app'
+    compileSdk 35
+    defaultConfig {
+        applicationId 'com.fantasytv.app'
+        minSdk 26
+        targetSdk 35
+        // release.ps1 raises these for every release: Android installs only a higher versionCode as an update.
+        versionCode 36
+        versionName '1.0.34'
+        // FantasyTV's own Yahoo app (one for everyone, like FantasyPros'): its keys come from yahoo.properties next to
+        // the project (never in git). Without the file the app still builds; Yahoo then needs your own keys.
+        def yahooProps = new Properties()
+        def yahooFile = rootProject.file('../yahoo.properties')
+        if (yahooFile.exists()) yahooFile.withInputStream { yahooProps.load(it) }
+        buildConfigField 'String', 'YAHOO_ID', "\"${yahooProps.clientId ?: ''}\""
+        buildConfigField 'String', 'YAHOO_SECRET', "\"${yahooProps.clientSecret ?: ''}\""
+    }
+    // The release key lives outside the project (C:\Talkies\FantasyTV-keys, never in git). Without it (anyone else
+    // building), the build signs with the usual debug key.
+    def keyProps = new Properties()
+    def keyFile = rootProject.file('../../FantasyTV-keys/keystore.properties')
+    if (keyFile.exists()) keyFile.withInputStream { keyProps.load(it) }
+    signingConfigs {
+        if (keyProps.storeFile) {
+            release {
+                storeFile file(keyProps.storeFile)
+                storePassword keyProps.storePassword
+                keyAlias keyProps.keyAlias
+                keyPassword keyProps.keyPassword
+            }
+        }
+    }
+    // The screens are the same web pages as the PC test version: ../../web, packed into the APK as they are.
+    sourceSets { main { assets.srcDirs = ['../../web'] } }
+    buildTypes {
+        release {
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            signingConfig keyProps.storeFile ? signingConfigs.release : signingConfigs.debug
+        }
+    }
+    buildFeatures { buildConfig true }   // BuildConfig.VERSION_CODE, for the update check
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+dependencies {
+    // ExoPlayer: plays the IPTV streams (MPEG-TS and HLS) under the overlay, and switches channels without leaving the app.
+    implementation 'androidx.media3:media3-exoplayer:1.4.1'
+    implementation 'androidx.media3:media3-exoplayer-hls:1.4.1'
+    // Reads the game clock off the broadcast (ClockReader). The model ships inside the APK (about 4 MB): Play services'
+    // on-demand download never finished on the Shield.
+    implementation 'com.google.mlkit:text-recognition:16.0.1'
+}

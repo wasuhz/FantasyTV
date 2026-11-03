@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 180" role="img" aria-label="FantasyTV Android TV banner">
+  <rect width="320" height="180" fill="#0B1428"/>
+  <g transform="translate(11 32) scale(.11)">
+    <g stroke="#24C8F4" stroke-width="48" stroke-linecap="round" stroke-linejoin="round" fill="none"><path d="M405 183 L512 290 L619 183"/><rect x="134" y="282" width="756" height="566" rx="116"/></g>
+    <path d="M208 567 Q512 257 816 567 Q512 877 208 567Z" fill="#24C8F4"/>
+    <path d="M302 567 Q322 464 355 413 Q512 351 669 413 Q702 464 722 567 Q702 670 669 721 Q512 783 355 721 Q322 670 302 567Z" fill="#0B1428"/>
+    <g stroke="#B9F340" stroke-width="25" stroke-linecap="round" fill="none"><path d="M368 489 Q512 429 656 489"/><path d="M398 461 L398 513 M455 443 L455 499 M512 438 L512 494 M569 443 L569 499 M626 461 L626 513"/></g>
+    <path d="M454 547 Q454 531 469 537 L631 634 Q645 645 631 655 L469 752 Q454 758 454 742Z" fill="#B9F340" transform="translate(0 -54)"/>
+  </g>
+  <text x="113" y="102" fill="#FFFFFF" font-family="DejaVu Sans, Arial, sans-serif" font-weight="bold" font-size="25" letter-spacing="-1.8">Fantasy</text>
+  <text x="227" y="102" fill="#24C8F4" font-family="DejaVu Sans, Arial, sans-serif" font-weight="bold" font-size="25" letter-spacing="-1.8">TV</text>
+  <text x="114" y="124" fill="#B9F340" font-family="DejaVu Sans, Arial, sans-serif" font-weight="bold" font-size="8" letter-spacing="2.3">FANTASY FOOTBALL</text>
+</svg>

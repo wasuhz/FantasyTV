@@ -1,0 +1,153 @@
+// Your IPTV (Dispatcharr), the same way the Talkies launcher finds a game (Iptv.java): the guide entry on the air
+// whose text names both teams, then the channel to play: one in the NFL group or named "NFL …" first, then your
+// local channels (Network TV), then any other, the highest channel number within each. Goes through the test
+// server's /proxy, since Dispatcharr doesn't allow browsers to read it directly.
+
+const GUIDE_AGE = 10 * 60e3;
+
+export class Iptv {
+  /** cfg: {base} for Dispatcharr on your network, or {server, user, pass} for an Xtream Codes login. */
+  constructor(cfg) {
+    this.cfg = cfg;
+    this.guide = null;      // {at, now: Map(channelId -> text on the air)}
+    this.list = null;       // {at, channels: [{id, name, group, no, url}]}
+  }
+
+  static fromSettings(s) {
+    if (s.iptvBase) return new Iptv({ base: s.iptvBase.replace(/\/+$/, '') });
+    if (s.xtServer && s.xtUser) return new Iptv({ server: s.xtServer.replace(/\/+$/, ''), user: s.xtUser, pass: s.xtPass || '' });
+    return null;
+  }
+
+  get guideUrl() {
+    const c = this.cfg;
+    return c.base ? `${c.base}/output/epg?days=1` : `${c.server}/xmltv.php?username=${enc(c.user)}&password=${enc(c.pass)}`;
+  }
+
+  get listUrl() {
+    const c = this.cfg;
+    return c.base ? `${c.base}/output/m3u` : `${c.server}/get.php?username=${enc(c.user)}&password=${enc(c.pass)}&type=m3u_plus&output=ts`;
+  }
+
+  /**
+   * The channel for this game, {name, url, no, via}, or null. In order: your pick for this game, your team rule,
+   * the guide or a channel named after the game, then your network rule (e.g. CBS → your local CBS).
+   * rules: {games: {gameId: channelName}, teams: {ABBR: channelName}, networks: {NAME: channelName}}.
+   */
+  async find(game, rules = {}) {
+    await this.refresh();
+    const named = n => n && this.list.channels.find(c => c.name === n);
+    const pick = named((rules.games || {})[game.id]);
+    if (pick) return { ...pick, via: 'your pick' };
+    const teamRule = named((rules.teams || {})[game.home.abbr]) || named((rules.teams || {})[game.away.abbr]);
+    if (teamRule) return { ...teamRule, via: 'team rule' };
+    const found = this.match(game);
+    if (found) return found;
+    const net = String(game.network || '').toUpperCase();
+    const netRule = Object.entries(rules.networks || {}).find(([k]) => k && net.includes(k.toUpperCase()));
+    const byNet = netRule && named(netRule[1]);
+    return byNet ? { ...byNet, via: `${netRule[0]} rule` } : null;
+  }
+
+  /** The guide / channel-name match on its own. */
+  match(game) {
+    const m = matcher(game);
+    const hits = new Set();
+    for (const [id, text] of this.guide.now) if (!text.includes('replay') && !otherSport(text) && m.names(text)) hits.add(id);
+    // Channels named after the matchup ("NFL | CAR/GB", "NFL 05: DAL @ PHI", "Cowboys vs Eagles") count too, guide or not.
+    let best = null, bestTier = 9;
+    for (const ch of this.list.channels) {
+      const lower = ch.name.toLowerCase();
+      if (otherSport(`${lower} ${ch.group.toLowerCase()}`)) continue;   // "NCAAM | UIW/OKST": Cardinals at Cowboys, but college
+      const named = m.names(lower) || (/nfl/.test(lower) && m.codes(lower));
+      if (!(ch.id && hits.has(ch.id)) && !named) continue;
+      const tier = /nfl/.test(ch.group.toLowerCase()) || /^nfl\b/.test(lower) ? 0 : /network|local/.test(ch.group.toLowerCase()) ? 1 : 2;
+      if (tier < bestTier || (tier === bestTier && ch.no > best.no)) { best = { ...ch, via: hits.has(ch.id) ? 'guide' : 'channel name' }; bestTier = tier; }
+    }
+    return best;
+  }
+
+  async refresh() {
+    const now = Date.now();
+    if (!this.guide || now - this.guide.at > GUIDE_AGE) this.guide = { at: now, now: parseGuide(await text(this.guideUrl), now) };
+    if (!this.list || now - this.list.at > GUIDE_AGE) this.list = { at: now, channels: parseM3u(await text(this.listUrl)) };
+  }
+}
+
+const enc = encodeURIComponent;
+const esc = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+// Other leagues share NFL nicknames (Cardinals, Cowboys, Giants, Rams, Panthers, Jets...): guide text or channels
+// that say they're another sport don't count, unless they also say NFL.
+const OTHER = /\b(?:ncaa\w*|college|cfb|mlb|nhl|nba|wnba|mls|ufl|xfl|cfl|baseball|hockey|basketball|soccer)\b/;
+const otherSport = text => OTHER.test(text) && !/\bnfl\b/.test(text);
+
+// Other codes guides and providers use for the same team.
+const ALIAS = { JAX: ['JAC'], LAR: ['LA'], WAS: ['WSH'], WSH: ['WAS'], ARI: ['ARZ'] };
+const SEP = '\\s*(?:@|at|vs\\.?|v\\.?|versus|-|/|\\|)\\s*';   // "DAL @ PHI", "DAL vs. PHI", "DAL-PHI", "DAL/PHI"
+
+/**
+ * How to recognise a game in guide text or a channel name (lower case):
+ *   names(text): both teams by name, whole words: "Eagles", "Philadelphia Eagles" or "Philadelphia";
+ *   codes(text): both team codes as whole words anywhere ("NFL | CAR/GB" style channel names);
+ *   names() also takes the codes as a matchup ("DAL @ PHI", "PHI vs DAL"), but never a lone code ("NO", "NE" are
+ *   everyday words).
+ */
+function matcher(game) {
+  const word = list => new RegExp(`\\b(?:${list.map(esc).join('|')})\\b`);
+  const teams = [game.away, game.home].map(t => {
+    const long = [t.name, t.full, t.city].filter(s => s && s.length > 3).map(s => s.toLowerCase());
+    const codes = [...new Set([t.abbr, t.espnAbbr, ...(ALIAS[t.abbr] || [])].filter(Boolean).map(s => s.toLowerCase()))];
+    return { long: long.length ? word(long) : null, code: word(codes), codes: codes.map(esc).join('|') };
+  });
+  const [a, b] = teams;
+  const pair = new RegExp(`\\b(?:${a.codes})${SEP}(?:${b.codes})\\b|\\b(?:${b.codes})${SEP}(?:${a.codes})\\b`);
+  return {
+    names: text => (teams.every(t => t.long && t.long.test(text))) || pair.test(text),
+    codes: text => teams.every(t => t.code.test(text)),
+  };
+}
+export const proxied = url => `/proxy?url=${enc(url)}`;
+
+async function text(url) {
+  const r = await fetch(proxied(url));
+  if (!r.ok) throw new Error(`IPTV ${r.status}`);
+  return r.text();
+}
+
+function xmltvTime(s) {
+  const m = /^(\d{4})(\d\d)(\d\d)(\d\d)(\d\d)(\d\d)\s*([+-]\d{4})?/.exec(s || '');
+  if (!m) return NaN;
+  const tz = m[7] ? `${m[7].slice(0, 3)}:${m[7].slice(3)}` : 'Z';
+  return Date.parse(`${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}:${m[6]}${tz}`);
+}
+
+function parseGuide(xml, now) {
+  const doc = new DOMParser().parseFromString(xml, 'text/xml');
+  const out = new Map();
+  for (const p of doc.getElementsByTagName('programme')) {
+    if (!(xmltvTime(p.getAttribute('start')) <= now && now < xmltvTime(p.getAttribute('stop')))) continue;
+    let t = '';
+    for (const tag of ['title', 'sub-title', 'desc']) for (const e of p.getElementsByTagName(tag)) t += ' ' + e.textContent;
+    const id = p.getAttribute('channel');
+    out.set(id, ((out.get(id) || '') + t).toLowerCase());
+  }
+  return out;
+}
+
+function parseM3u(m3u) {
+  const out = [];
+  let cur = null;
+  for (const raw of m3u.split(/\r?\n/)) {
+    const line = raw.trim();
+    if (line.startsWith('#EXTINF')) {
+      const attr = k => (new RegExp(`${k}="([^"]*)"`).exec(line) || [])[1] || '';
+      const id = attr('tvg-id');
+      cur = { id, name: line.slice(line.lastIndexOf(',') + 1).trim(), group: attr('group-title'),
+        no: parseFloat(attr('tvg-chno')) || parseFloat(id) || 0 };
+    } else if (cur && line && !line.startsWith('#')) {
+      cur.url = line; out.push(cur); cur = null;
+    }
+  }
+  return out;
+}

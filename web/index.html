@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FantasyTV</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="icon" href="img/icon-32.png">
+<link rel="apple-touch-icon" href="img/icon-192.png">
+<link rel="stylesheet" href="css/app.css">
+<style>
+  body { padding: 20px 16px 40px; }
+  .top { display: flex; align-items: center; gap: 12px; max-width: 1500px; margin: 0 auto 18px; flex-wrap: wrap; }
+  .top h1 { margin: 0; font: 700 22px/1 var(--sans); }
+  .top .sp { flex: 1; }
+  .btn { padding: 10px 14px; border-radius: 6px; border: 1px solid var(--line); background: var(--panel); font: 600 13px/1 var(--mono); text-decoration: none; color: var(--text); cursor: pointer; }
+  .btn.pri { background: var(--amber); color: #1a1003; border-color: var(--amber); }
+  .demo { display: grid; grid-template-columns: 1fr 390px; gap: 18px; max-width: 1500px; margin: 0 auto; align-items: start; }
+  .tv { aspect-ratio: 16/9; border: 10px solid #111; border-radius: 10px; overflow: hidden; background: #000; box-shadow: 0 30px 80px #000a; }
+  .phone { height: 780px; border: 10px solid #111; border-radius: 34px; overflow: hidden; background: var(--bg); }
+  iframe { width: 100%; height: 100%; border: 0; display: block; }
+  .help { font: 500 13px/1.6 var(--mono); color: var(--muted); margin-top: 12px; }
+  .help kbd { border: 1px solid var(--line); border-radius: 3px; padding: 1px 5px; color: var(--text); }
+  dialog { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 10px; width: min(560px, 100%); padding: 22px; }
+  dialog::backdrop { background: #000a; }
+  label { display: block; font: 600 12px/1 var(--mono); color: var(--muted); letter-spacing: .08em; margin: 14px 0 6px; }
+  input, select { width: 100%; padding: 10px; border-radius: 5px; border: 1px solid var(--line); background: var(--bg); color: var(--text); font: 500 14px/1 var(--mono); }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  dialog p { font: 500 12px/1.5 var(--mono); color: var(--dim); margin: 6px 0 0; }
+  @media (max-width: 1000px) { .demo { grid-template-columns: 1fr; } .phone { height: 700px; max-width: 390px; } }
+</style>
+</head>
+<body>
+<div class="top">
+  <span id="logo"></span><h1>FantasyTV</h1><span class="tag amber" id="modeTag"></span><span class="sp"></span>
+  <button class="btn" id="practice">Practice Sunday</button>
+  <button class="btn" id="liveBtn">Live games</button>
+  <a class="btn" href="tv.html" target="_blank">TV full screen</a>
+  <button class="btn pri" id="setBtn">Settings</button>
+</div>
+<div class="demo">
+  <div>
+    <div class="tv"><iframe id="tvFrame" title="TV"></iframe></div>
+    <div class="help">Click the TV, then use the remote keys: <kbd>←</kbd> Radar · <kbd>↑</kbd><kbd>↓</kbd> move · <kbd>Enter</kbd> watch (or cancel a switch) · <kbd>→</kbd> heart · <kbd>P</kbd> pause AutoTune · <kbd>Esc</kbd> back.
+      Your phone: scan the code on the TV (same Wi-Fi).</div>
+  </div>
+  <div class="phone"><iframe id="phoneFrame" src="remote.html" title="Phone remote"></iframe></div>
+</div>
+
+<dialog id="dlg">
+  <form method="dialog">
+    <h2 style="margin:0;font:700 20px/1 var(--sans)">Settings</h2>
+    <label>SLEEPER USERNAME</label><input name="sleeper">
+    <div class="two">
+      <div><label>STREAM DELAY (S)</label><input name="delay" type="number" min="0" max="180"></div>
+      <div><label>COOLDOWN (S)</label><input name="cooldown" type="number" min="20" max="600"></div>
+    </div>
+    <p>Stream delay: how far your IPTV runs behind live (ESPN's data arrives first). The screen waits this long before reacting, so it never spoils a play.</p>
+    <label>DISPATCHARR ADDRESS (YOUR NETWORK)</label><input name="iptvBase" placeholder="http://your-server:9191">
+    <p>Or an Xtream Codes login, the same one TiviMate uses:</p>
+    <label>XTREAM SERVER</label><input name="xtServer" placeholder="http://example.com:9191">
+    <div class="two">
+      <div><label>USERNAME</label><input name="xtUser" autocomplete="off"></div>
+      <div><label>PASSWORD</label><input name="xtPass" type="password" autocomplete="off"></div>
+    </div>
+    <p>These stay in this browser only.</p>
+    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:18px">
+      <button class="btn" value="cancel">Cancel</button><button class="btn pri" value="save">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<script type="module">
+import { LOGO, loadSettings, saveSettings } from './js/common.js';
+document.getElementById('logo').innerHTML = LOGO;
+const s = loadSettings();
+const tv = document.getElementById('tvFrame');
+const show = () => {
+  document.getElementById('modeTag').textContent = s.mode === 'sim' ? 'PRACTICE SUNDAY' : 'LIVE';
+  tv.src = `tv.html?${s.mode}=1&t=${Date.now()}`;
+};
+const setMode = m => { s.mode = m; saveSettings(s); show(); };
+document.getElementById('practice').onclick = () => setMode('sim');
+document.getElementById('liveBtn').onclick = () => setMode('live');
+const dlg = document.getElementById('dlg'), f = dlg.querySelector('form');
+document.getElementById('setBtn').onclick = () => {
+  for (const el of f.elements) if (el.name) el.value = s[el.name] ?? '';
+  dlg.showModal();
+};
+dlg.addEventListener('close', () => {
+  if (dlg.returnValue !== 'save') return;
+  for (const el of f.elements) if (el.name) s[el.name] = el.type === 'number' ? +el.value : el.value.trim();
+  saveSettings(s);
+  show();
+});
+show();
+</script>
+</body>
+</html>

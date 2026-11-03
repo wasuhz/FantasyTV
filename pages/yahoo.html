@@ -1,0 +1,25 @@
+<!doctype html>
+<!-- FantasyTV's Yahoo return page (GitHub Pages, wasuhz.github.io/FantasyTV-releases/yahoo.html). After you approve
+     FantasyTV on Yahoo, Yahoo sends you here with a one-time code; `state` is your TV's address on your Wi-Fi, so this
+     page sends you straight on to the TV, which finishes the sign-in. Nothing is stored or sent anywhere else. -->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>FantasyTV · Yahoo</title>
+<style>
+  body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 24px; box-sizing: border-box; text-align: center;
+    background: #021838; color: #fff; font: 600 18px/1.45 system-ui, sans-serif; }
+  .code { margin: 14px 0; padding: 12px 16px; border-radius: 10px; background: #fff; color: #021838; font: 700 20px/1.2 ui-monospace, monospace; word-break: break-all; }
+  small { color: #b9c6da; font-weight: 500; }
+</style>
+<div id="msg">Connecting to your TV…</div>
+<script>
+  const q = new URLSearchParams(location.search), code = q.get('code'), error = q.get('error'), tv = q.get('state') || '';
+  // Only ever a FantasyTV on a home network (private address, port 8765): never anywhere else.
+  const home = /^http:\/\/(10\.\d+|192\.168|172\.(1[6-9]|2\d|3[01]))\.\d+\.\d+:8765$/.test(tv);
+  const msg = document.getElementById('msg');
+  if (home) location.replace(`${tv}/yahoo/done?${code ? 'code=' + encodeURIComponent(code) : 'error=' + encodeURIComponent(error || 'none')}`);
+  else if (code) {
+    msg.innerHTML = 'Almost done. Open FantasyTV on your phone (Players → Yahoo) and paste this code:<div class="code"></div><small>It works once, for a few minutes.</small>';
+    msg.querySelector('.code').textContent = code;
+  } else msg.textContent = error ? "Yahoo didn't connect (you may have said no). Try again from FantasyTV." : 'Nothing to do here.';
+</script>

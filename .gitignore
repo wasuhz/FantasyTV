@@ -1,0 +1,16 @@
+# Settings saved from the phone on the PC test server (may hold an IPTV login)
+config.json
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+research/
+
+# This PC's TV address for install.ps1
+.tv
+dist/
+screenshots/
+
+# FantasyTV's Yahoo app keys (built into the APK, never in git)
+yahoo.properties
+~$*
