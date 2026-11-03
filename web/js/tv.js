@@ -254,7 +254,7 @@ function spotBigPlays(prev, next) {
         if (p.team !== g.home.abbr && p.team !== g.away.abbr) continue;
         const got = playPoints(p, text, g.sit.lastPlay.type);
         if (!got || got.pts <= 0 || got.pts < popupMin()) continue;   // any play that gains you something (or the Settings minimum)
-        const watching = g.id === auto.current || (split && split.game === g.id);
+        const watching = watchingGame(g.id);
         // A touchdown elsewhere waits until it airs on its own channel too: AutoTune may jump there first (then it's
         // the game on screen and gets its moment as it happens), and if not, the popup doesn't spoil it.
         const td = /touchdown/i.test(got.what);
@@ -352,7 +352,9 @@ async function refreshMatchups() {
  * Fantasy points run ahead of your stream (they move the moment a play happens): the TV shows the reading from your
  * stream's delay ago, so a score never changes before you've seen the play. The newest reading when there's no older.
  */
-const behindMs = () => (auto.current ? delayFor(auto.current) : settings.delay) * 1000;
+// The same moment as the popups (your stream's delay + 2 s), so a play's points and its popup land together.
+const SCORE_MARGIN = 2;
+const behindMs = () => ((auto.current && !redZone ? delayFor(auto.current) : settings.delay) + SCORE_MARGIN) * 1000;
 function delayed(history) {
   const at = Date.now() - behindMs();
   let best = history[0];
@@ -429,8 +431,8 @@ function popupsFromMatchups(before, after) {
     const line = (() => { const s = (pointsNow[id] || {}).stats; return s ? statLine(p.pos, s) : ''; })();
     // The play itself isn't known here (Sleeper only says points went up): show the day so far. For the game you're
     // watching, wait the channel's delay: Sleeper only hears of a play after it happens, so by then it's on your screen.
-    const watching = g && (g.id === auto.current || (split && split.game === g.id));
-    const wait = watching ? ((sim ? settings.delay : delayFor(g.id)) + 2) * 1000 : 0;
+    const watching = g && watchingGame(g.id);
+    const wait = watching || redZone ? ((sim || redZone ? settings.delay : delayFor(g.id)) + 2) * 1000 : 0;   // RedZone may show it too
     popups.push({ showAt: Date.now() + wait, heard: Date.now(), game: g && g.id, who: p, pts: Math.round(gain * 10) / 10, what: line ? `on the day: ${line}` : 'just scored', team,
       teams: p.leagues.filter(l => l.starter).length });
     playStats.queued++;
@@ -443,8 +445,13 @@ function popupsFromMatchups(before, after) {
  * delay (25 s by default) in case the channel's delay is still a guess. Other games: right away, nothing to spoil
  * ("all": they wait the popup delay too; "stream": every game waits for its channel's delay).
  */
+/** The game is on your screen. NFL RedZone counts as no single game: it can cut to any of them, so all your players qualify. */
+function watchingGame(id) { return !!id && !redZone && (id === auto.current || !!(split && split.game === id)); }
+
 function popupWait(g, watching) {
   const fixed = Math.max(0, +(settings.popupDelay ?? 25) || 0);
+  // RedZone may be about to show this very play: wait for the stream, like the game you're watching.
+  if (redZone) return Math.max(fixed, (+settings.delay || 30) + 2) * 1000;
   const stream = (sim ? settings.delay : delayFor(g.id)) + 2;
   if (settings.popupTiming === 'stream') return stream * 1000;
   if (watching) return Math.max(fixed, stream) * 1000;
@@ -1459,7 +1466,7 @@ function injuryFrom(g, text, mine, at) {
     const key = p.id + g.id;
     if (Date.now() - (injurySeen[key] || 0) < 15 * 60e3) continue;
     injurySeen[key] = Date.now();
-    const watching = g.id === auto.current || (split && split.game === g.id);
+    const watching = watchingGame(g.id);
     const why = (sentences.find(s => s.includes(n) && INJURY.test(s)) || '').match(/questionable to return|doubtful to return|ruled out|out for the \w+|concussion|carted off/i);
     popups.push({ kind: 'alert', tone: 'injury', showAt: at + popupWait(g, watching), game: g.id, team: p.team === g.home.abbr ? g.home : g.away,
       big: 'INJURY', line: `${p.short} ${!why ? 'is hurt' : /concussion/i.test(why[0]) ? 'being checked for a concussion' : /^out/i.test(why[0]) ? 'is ' + why[0].toLowerCase() : why[0].toLowerCase()}`,
@@ -1490,7 +1497,7 @@ function dangerFrom(g, before, text, at) {
   const opps = Object.values(roster.opponents).filter(p => !roster.players[p.id] && p.leagues.some(l => l.starter)
     && (p.team === g.home.abbr || p.team === g.away.abbr));
   if (!opps.length) return;
-  const watching = g.id === auto.current || (split && split.game === g.id);
+  const watching = watchingGame(g.id);
   const showAt = at + popupWait(g, watching);
   const vs = p => (p.leagues.find(l => l.starter) || p.leagues[0]).team;
   for (const p of opps) {
@@ -1635,7 +1642,7 @@ function hidePop(el) {
 /** Every half second: popups that are due slide in on the right; ones whose time is up slide out. */
 function showPopups() {
   const now = Date.now(), due = popups.filter(p => p.showAt <= now);
-  const onScreen = id => id && (id === auto.current || (split && split.game === id));
+  const onScreen = watchingGame;
   // Up for a game you've since switched to: you're watching it now, so it goes.
   for (const el of document.querySelectorAll('#pops .pop.on:not(.demo)')) if (el.hideAt <= now || onScreen(el.game)) hidePop(el);
   popups = popups.filter(p => p.showAt > now && now - p.showAt < 120e3);
@@ -1649,9 +1656,11 @@ function showPopups() {
       if (now < airs) { p.showAt = airs; popups.push(p); continue; }
     }
     playStats.shown++;
-    if (view !== 'full') continue;   // Scores only and Clean: no popups, banners or touchdown moments
+    // Clean: nothing at all. Scores only: the small popups your Alerts setting allows, never the big effects.
+    if (view === 'clean') continue;
     // The game you're watching never gets a popup: you saw the play (or the injury, or the swing it caused).
     if (p.kind === 'alert' && watching) continue;
+    if (watching && view === 'scores') continue;   // no cards to light, no touchdown moment
     // Your player in the game you're watching: his card shows the points instead. It lights up, and a touchdown gets
     // its moment (Settings: full, card glow only, or off).
     if (watching) {
@@ -1661,13 +1670,13 @@ function showPopups() {
       continue;
     }
     // Your player's touchdown in another game (Settings): a small popup (default), the full banner, or nothing.
-    const away = settings.tdAway || 'small';
+    const away = view === 'scores' && settings.tdAway === 'full' ? 'small' : settings.tdAway || 'small';   // Scores only: never the banner
     if (p.kind !== 'alert' && p.td && away === 'off') continue;
     const el = document.createElement('div');
     el.className = 'pop';
     el.style.setProperty('--team', p.team.color);
     // From another game: OK on the remote jumps there while it's up (the newest such popup wins).
-    const elsewhere = p.game && p.game !== auto.current && (game(p.game) || {}).state === 'in';
+    const elsewhere = p.game && (redZone || p.game !== auto.current) && (game(p.game) || {}).state === 'in';   // in RedZone, every game is elsewhere
     if (p.kind === 'alert') {
       el.classList.add('alert', p.tone);
       el.innerHTML = `<b class="pts">${esc(p.big)}</b><span class="who">${esc(p.line)}${p.sub ? ` <em>· ${esc(p.sub)}</em>` : ''}</span>`
@@ -1858,6 +1867,7 @@ function onKey(e) {
   if (!radarOpen && k === 'Enter' && jumpTo && Date.now() < jumpTo.until) {
     const to = jumpTo.game;
     jumpTo = null;
+    if (redZone) { leaveRedZone(); auto.current = null; }   // out of RedZone, straight to that game (and your usual view)
     const r = auto.pick(to);
     if (r.switchTo) tune(r.switchTo, r.why);
     e.preventDefault();
