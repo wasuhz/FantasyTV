@@ -4,7 +4,7 @@ $root = $PSScriptRoot
 $http = New-Object Net.HttpListener
 $http.Prefixes.Add('http://localhost:8790/')
 $http.Start()
-$types = @{ '.html' = 'text/html; charset=utf-8'; '.css' = 'text/css'; '.png' = 'image/png'; '.jpg' = 'image/jpeg'; '.js' = 'text/javascript' }
+$types = @{ '.html' = 'text/html; charset=utf-8'; '.css' = 'text/css'; '.png' = 'image/png'; '.jpg' = 'image/jpeg'; '.js' = 'text/javascript'; '.svg' = 'image/svg+xml' }
 while ($http.IsListening) {
     $c = $http.GetContext()
     $p = [Uri]::UnescapeDataString($c.Request.Url.AbsolutePath).TrimStart('/')

@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 760" fill="none" stroke="#fff" stroke-linecap="round" stroke-linejoin="round">
+  <!-- A coach's whiteboard play, drawn by hand: the background of fantasytvapp.com's hero (faded there by CSS) -->
+  <defs>
+    <marker id="a" viewBox="0 0 20 20" refX="14" refY="10" markerWidth="9" markerHeight="9" orient="auto-start-reverse">
+      <path d="M3 3 L15 10 L3 17" stroke="#fff" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+  </defs>
+
+  <!-- yard numbers and hash marks along the sides -->
+  <g stroke-width="3" opacity=".7">
+    <text x="70" y="250" fill="#fff" stroke="none" font-family="Arial Black, Arial, sans-serif" font-weight="900" font-size="78" transform="rotate(-90 70 250)" text-anchor="middle">4 0</text>
+    <text x="1530" y="250" fill="#fff" stroke="none" font-family="Arial Black, Arial, sans-serif" font-weight="900" font-size="78" transform="rotate(90 1530 250)" text-anchor="middle">4 0</text>
+    <text x="70" y="610" fill="#fff" stroke="none" font-family="Arial Black, Arial, sans-serif" font-weight="900" font-size="78" transform="rotate(-90 70 610)" text-anchor="middle">3 0</text>
+    <text x="1530" y="610" fill="#fff" stroke="none" font-family="Arial Black, Arial, sans-serif" font-weight="900" font-size="78" transform="rotate(90 1530 610)" text-anchor="middle">3 0</text>
+    <path d="M150 100h26M150 160h26M150 220h26M150 280h26M150 340h26M150 400h26M150 460h26M150 520h26M150 580h26M150 640h26M150 700h26"/>
+    <path d="M1424 100h26M1424 160h26M1424 220h26M1424 280h26M1424 340h26M1424 400h26M1424 460h26M1424 520h26M1424 580h26M1424 640h26M1424 700h26"/>
+  </g>
+
+  <!-- line of scrimmage -->
+  <path d="M190 428 C 520 424, 1080 432, 1410 426" stroke-width="3" stroke-dasharray="14 16" opacity=".8"/>
+
+  <!-- offense: O's, a little uneven like a marker -->
+  <g stroke-width="4.5">
+    <circle cx="682" cy="458" r="19"/><circle cx="742" cy="460" r="20"/><circle cx="802" cy="459" r="19"/><circle cx="861" cy="461" r="20"/><circle cx="920" cy="458" r="19"/>
+    <circle cx="990" cy="464" r="19"/>
+    <circle cx="802" cy="528" r="20"/>
+    <circle cx="804" cy="612" r="19"/>
+    <circle cx="300" cy="458" r="20"/><circle cx="1300" cy="458" r="19"/><circle cx="1150" cy="478" r="20"/>
+  </g>
+  <!-- the ball, snapped -->
+  <path d="M792 432 q10 -12 20 0 q-10 12 -20 0z" stroke-width="3"/>
+
+  <!-- defense: X's -->
+  <g stroke-width="4.5">
+    <path d="M697 360l26 26m0-26l-26 26M757 358l26 26m0-26l-26 26M818 361l26 26m0-26l-26 26M878 359l26 26m0-26l-26 26"/>
+    <path d="M627 280l26 26m0-26l-26 26M790 268l26 26m0-26l-26 26M955 282l26 26m0-26l-26 26"/>
+    <path d="M287 322l26 26m0-26l-26 26M1287 320l26 26m0-26l-26 26M1137 336l26 26m0-26l-26 26"/>
+    <path d="M590 150l26 26m0-26l-26 26M985 146l26 26m0-26l-26 26"/>
+  </g>
+
+  <!-- routes -->
+  <g stroke-width="4.5" marker-end="url(#a)">
+    <path d="M300 436 C 302 360, 298 300, 304 250 C 360 210, 460 160, 560 116"/>          <!-- post -->
+    <path d="M1300 436 C 1298 360, 1302 290, 1298 236 C 1220 238, 1140 236, 1062 240"/>   <!-- dig -->
+    <path d="M1150 456 C 1240 430, 1320 400, 1360 340 C 1400 280, 1420 230, 1440 170"/>  <!-- wheel -->
+    <path d="M990 442 C 992 380, 986 300, 990 190"/>                                       <!-- seam -->
+    <path d="M784 612 C 700 610, 600 596, 520 560"/>                                        <!-- swing -->
+  </g>
+  <!-- the QB's drop, dashed -->
+  <path d="M802 550 C 803 566, 801 580, 802 590" stroke-width="3" stroke-dasharray="6 9"/>
+  <!-- a pre-snap motion, squiggly -->
+  <path d="M1170 486 q14 10 28 0 t28 0 t28 0" stroke-width="3"/>
+</svg>

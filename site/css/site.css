@@ -118,9 +118,10 @@ nav .links a:hover::after { transform: scaleX(1); }
 
 /* hero: a faint field grid behind it, the demo lifted off the page */
 header.hero { background: transparent; position: relative; isolation: isolate; }
-header.hero::before { content: ''; position: absolute; inset: 0 0 auto 0; height: 760px; z-index: -1; pointer-events: none;
-  background-image: linear-gradient(rgba(255,255,255,.04) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.04) 1px, transparent 1px);
-  background-size: 64px 64px; -webkit-mask-image: radial-gradient(ellipse 70% 70% at 50% 0%, #000 25%, transparent 75%); mask-image: radial-gradient(ellipse 70% 70% at 50% 0%, #000 25%, transparent 75%); }
+/* behind the headline: a coach's whiteboard play (X's, O's and routes), chalk-faint, fading out at the edges */
+header.hero::before { content: ''; position: absolute; inset: 0 0 auto 0; height: 760px; z-index: -1; pointer-events: none; opacity: .15;
+  background: url(/img/playbook.svg) 50% 10px / min(1500px, 150vw) auto no-repeat;
+  -webkit-mask-image: radial-gradient(ellipse 62% 75% at 50% 32%, #000 30%, transparent 78%); mask-image: radial-gradient(ellipse 62% 75% at 50% 32%, #000 30%, transparent 78%); }
 header.hero .wrap { padding-block: 56px 24px; }
 /* the hero's spec line: three short columns, a red label over plain text, thin dividers between */
 .specs { margin: 8px 0 0; display: grid; grid-template-columns: repeat(3, auto); justify-content: start; max-width: 100%; }
