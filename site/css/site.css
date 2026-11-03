@@ -149,15 +149,20 @@ header.hero .wrap { padding-block: 56px 24px; }
 main .wrap { padding-block: 48px 72px; gap: 72px; }
 .seg h2 { box-shadow: 0 10px 30px -14px rgba(255,59,71,.8); }
 
-/* works with */
-.workswith .groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 290px), 1fr)); gap: 12px; }
-.workswith .group { background: var(--glass); border: 1px solid var(--edge); border-radius: 16px; padding: 18px 18px 20px; display: grid; gap: 12px; align-content: start; }
-.workswith small { font: 700 13px/1 var(--display); letter-spacing: .16em; text-transform: uppercase; color: var(--red-ink); }
-.workswith ul { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
-.workswith li { font: italic 800 21px/1 var(--display); letter-spacing: .01em; color: #eaf0fa; padding: 10px 14px; border-radius: 10px;
-  background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08); }
-.workswith li em { font: 600 12px/1 var(--body); font-style: normal; color: var(--muted); margin-left: 4px; letter-spacing: .02em; vertical-align: 2px; }
-.workswith li.soon { color: var(--muted); border-style: dashed; }
+/* works with: three columns like a lineup card, a red label over the names, thin dividers between (no boxes) */
+.workswith .groups { display: grid; grid-template-columns: repeat(3, 1fr); }
+.workswith .group { display: grid; gap: 14px; align-content: start; padding: 4px 32px; border-left: 1px solid rgba(255,255,255,.12); }
+.workswith .group:first-child { padding-left: 0; border-left: 0; }
+.workswith small { font: 700 13px/1 var(--display); letter-spacing: .18em; text-transform: uppercase; color: var(--red-ink); }
+.workswith ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.workswith li { font: italic 800 26px/1.05 var(--display); letter-spacing: .01em; color: #eef2f9; }
+.workswith li em { font: 500 14px/1 var(--body); font-style: normal; color: var(--muted); margin-left: 8px; letter-spacing: 0; vertical-align: 3px; }
+.workswith li.soon { color: #7d8ea9; }
+@media (max-width: 760px) {
+  .workswith .groups { grid-template-columns: 1fr; gap: 22px; }
+  .workswith .group, .workswith .group:first-child { padding: 0 0 0 14px; border-left: 2px solid rgba(255,59,71,.6); }
+  .workswith li { font-size: 22px; }
+}
 
 /* feature cards: glass, an icon each, a red edge on hover */
 .grid { gap: 14px; }
