@@ -821,6 +821,7 @@ async function pollCommands() {
 function handle(c) {
   if (c.type === 'pick') { leaveRedZone(); const r = auto.pick(c.id); if (r.switchTo) tune(r.switchTo, r.why); }
   else if (c.type === 'redzone') watchRedZone();
+  else if (c.type === 'view') setView(c.v);
   else if (c.type === 'tour') startTour();   // the phone's "Show the remote tour"
   // A pretend play for checking the look: {type: 'testPlay', name?: 'Okonkwo', pts?, what?}. It goes through the real
   // popup, so the card glow, the touchdown flash and the replay prompt all show (nothing is scored).
@@ -849,7 +850,8 @@ function handle(c) {
   else if (c.type === 'skip') { prefs.skips[c.id] = !prefs.skips[c.id]; savePrefs(); }
   else if (c.type === 'pause') {
     // AutoTune on while RedZone is up: leave RedZone, and tune its top game now (the old game isn't on screen).
-    if (!c.on && redZone) { redZone = null; auto.current = null; }
+    if (!c.on && redZone) { leaveRedZone(); auto.current = null; }
+    viewHeld = null;   // set by hand: Clean doesn't put it back later
     auto.setPaused(!!c.on);
     toast(c.on ? 'AutoTune off · ▲ turns it back on' : 'AutoTune on');
   }
@@ -908,7 +910,7 @@ function publish() {
   link.publish({
     at: Date.now(), mode: sim ? 'sim' : 'live', screen: [document.documentElement.clientWidth, innerWidth, innerHeight, devicePixelRatio], user: roster.user, teams: roster.teams.map(({ espn, ...t }) => ({ ...t, espn: espn ? { id: espn.id, teamId: espn.teamId } : undefined })), week,   // no ESPN cookies to the phone
     current: auto.current, paused: auto.paused, locked: auto.locked, split: split && split.game, behind,
-    redZone: !!redZone, redZoneOpen: !!redZoneRow(),
+    redZone: !!redZone, redZoneOpen: !!redZoneRow(), view,
     version: native ? native.version() : 'browser', update: update && { versionName: update.versionName, notes: update.notes }, channel: tunedChannel && tunedChannel.name,
     pending: auto.pending && { to: auto.pending.to, endsAt: auto.pending.endsAt, why: auto.pending.why },
     playStats, popupsWaiting: popups.length, ad: { misses: bugMisses, game: bugGame, on: auto.adOn }, readClock, channelDelays: settings.channelDelays || {}, delaySamples,
@@ -1239,13 +1241,42 @@ async function watchRedZone() {
   tunedChannel = ch;
   stopVideo();
   playStream(ch.url);
-  toast('NFL RedZone · AutoTune waits until you pick a game');
+  if (settings.rzScores !== false && view === 'full') { viewBeforeRz = 'full'; setView('scores', true); }
+  toast(`NFL RedZone · AutoTune waits until you pick a game${view === 'scores' ? ' · scores only on screen' : ''}`);
 }
 function leaveRedZone() {
   if (!redZone) return;
   auto.setPaused(redZone.wasPaused);
   redZone = null;
+  if (viewBeforeRz && view === 'scores') setView(viewBeforeRz, true);   // back to the view RedZone switched from
+  viewBeforeRz = null;
 }
+
+// ---- On screen: Full (everything), Scores only (your leagues' scores and win chances, still behind your stream's
+// delay, and nothing else), Clean (just the game: no overlay, and AutoTune pauses so it stays on). Remembered on this
+// TV. NFL RedZone switches to Scores only by itself (Settings: rzScores), and back when you leave it.
+const VIEWS = ['full', 'scores', 'clean'], VIEW_NAME = { full: 'Full', scores: 'Scores only', clean: 'Clean' };
+let view = (() => { try { const v = localStorage.getItem('ftv.view'); return VIEWS.includes(v) ? v : 'full'; } catch { return 'full'; } })();
+let viewHeld = null;       // AutoTune's on/off before Clean paused it
+let viewBeforeRz = null;   // the view NFL RedZone switched away from
+function applyView() { for (const v of VIEWS) document.documentElement.classList.toggle(`view-${v}`, v === view); }
+function setView(v, quiet) {
+  if (!VIEWS.includes(v)) return;
+  if (v !== view) {
+    if (v === 'clean') { viewHeld = auto.paused; auto.setPaused(true); }
+    else if (view === 'clean' && viewHeld !== null) { if (!redZone) auto.setPaused(viewHeld); viewHeld = null; }
+    view = v;
+    try { localStorage.setItem('ftv.view', v); } catch { /* still applies */ }
+  }
+  applyView();
+  if (!quiet) toast(`On screen: ${VIEW_NAME[v]}${v === 'full' ? '' : ` · change it in All Games (${phone ? '☰' : '▼'})`}`);
+  if (radarOpen) renderRadar();
+}
+const cycleView = () => setView(VIEWS[(VIEWS.indexOf(view) + 1) % VIEWS.length]);
+// The first row a freshly opened game list points at: past the On screen row, so ▼ then OK still watches the top game.
+const firstRow = () => Math.max(0, radarList().findIndex(r => !r.view));
+applyView();
+if (view === 'clean') { viewHeld = auto.paused; auto.setPaused(true); }   // opened in Clean: it stays put
 // At 6:45 RedZone signs off: back to AutoTune's best game.
 setInterval(() => {
   if (!redZone || redZoneHours() || params.has('redzone')) return;
@@ -1261,7 +1292,7 @@ function radarList() {
   const rz = redZoneRow();
   // An update waiting (the card was put off or missed): first in the list, OK installs it.
   const up = update && !installing && native ? { upd: true, id: 'update' } : null;
-  return [...(up ? [up] : []), ...(rz ? [rz] : []), ...live.filter(mine), ...live.filter(g => !mine(g)), ...ranked.filter(g => g.state === 'pre')];
+  return [...(up ? [up] : []), { view: true, id: 'view' }, ...(rz ? [rz] : []), ...live.filter(mine), ...live.filter(g => !mine(g)), ...ranked.filter(g => g.state === 'pre')];
 }
 const RADAR_ROWS = 5;   // shown at once; the list scrolls with the focus
 
@@ -1272,6 +1303,10 @@ function renderRadar() {
   const first = Math.max(0, Math.min(radarFocus - 2, list.length - RADAR_ROWS));
   setHtml($('#radar .list'), list.slice(first, first + RADAR_ROWS).map((g, j) => {
     const i = first + j;
+    if (g.view) return `<div data-i="${i}" class="rg viewrow ${i === radarFocus ? 'focus' : ''}">
+      <div class="top"><span>On screen</span><span class="vw">${VIEW_NAME[view]}</span></div>
+      <div class="sub">${VIEWS.map(v => `<span class="${v === view ? 'on' : ''}">${VIEW_NAME[v]}</span>`).join(' · ')}</div>
+      <div class="pl"><span class="muted">${phone ? 'Tap' : 'OK'} to switch</span></div></div>`;
     if (g.upd) return `<div data-i="${i}" class="rg ${i === radarFocus ? 'focus' : ''}">
       <div class="top"><span class="tag" style="background:var(--lime);color:#04222a">NEW</span><span>Update FantasyTV</span></div>
       <div class="sub">Version ${esc(update.versionName)}${update.notes ? ` · ${esc(update.notes)}` : ''}</div>
@@ -1614,6 +1649,7 @@ function showPopups() {
       if (now < airs) { p.showAt = airs; popups.push(p); continue; }
     }
     playStats.shown++;
+    if (view !== 'full') continue;   // Scores only and Clean: no popups, banners or touchdown moments
     // The game you're watching never gets a popup: you saw the play (or the injury, or the swing it caused).
     if (p.kind === 'alert' && watching) continue;
     // Your player in the game you're watching: his card shows the points instead. It lights up, and a touchdown gets
@@ -1705,7 +1741,7 @@ const TOUR = [
   { key: '▲', target: '#atTag', title: 'Up: AutoTune on / off',
     text: 'AutoTune switches to the game that matters most to your lineup. Press Up to stay where you are; Up again turns it back on. Before a switch, a 5 second countdown shows: OK or Back cancels it.' },
   { key: '▼', target: '#radar', radar: true, right: true, title: 'Down: every game',
-    text: 'All the live games, yours first. Up and Down move, OK watches a game, ▶ hearts it (AutoTune favors hearted games in close calls), Back closes the list. A game you pick stays on for 45 seconds (less if it goes to a commercial), then AutoTune takes over again. To stay on it, turn AutoTune off with Up.' },
+    text: 'All the live games, yours first. Up and Down move, OK watches a game (the On screen row at the top switches between Full, Scores only and Clean), ▶ hearts it (AutoTune favors hearted games in close calls), Back closes the list. A game you pick stays on for 45 seconds (less if it goes to a commercial), then AutoTune takes over again. To stay on it, turn AutoTune off with Up.' },
   { key: '◀ ▶', target: '#bug .in', title: 'Left: rewind · Right: live',
     text: 'Left jumps back 10 seconds in the game you\'re watching (again for more, up to a minute). Right goes back to live. Only the game on screen can be rewound: FantasyTV keeps its last minute from when you tuned in.' },
   { key: 'OK', target: '#pops .demo', demo: 1, title: 'OK on a popup',
@@ -1829,14 +1865,15 @@ function onKey(e) {
   }
   if (!radarOpen && (k === 'ArrowUp' || k === 'ArrowDown') && stepPops(k === 'ArrowUp' ? 1 : -1)) { e.preventDefault(); return; }
   if (!radarOpen) {
-    if (k === 'ArrowDown' || k === 'r' || k === 'ContextMenu') { radarOpen = true; radarFocus = 0; $('#radar').classList.add('on'); renderRadar(); }
+    if (k === 'ArrowDown' || k === 'r' || k === 'ContextMenu') { radarOpen = true; radarFocus = firstRow(); $('#radar').classList.add('on'); renderRadar(); }
     else if (k === 'ArrowUp' || k === 'p') handle({ type: 'pause', on: !auto.paused });   // ▲ turns AutoTune on and off
     return;
   }
   const list = radarList();
   if (k === 'ArrowDown') radarFocus = Math.min(list.length - 1, radarFocus + 1);
   else if (k === 'ArrowUp') radarFocus = Math.max(0, radarFocus - 1);
-  else if (k === 'ArrowRight' && list[radarFocus] && !list[radarFocus].redzone && !list[radarFocus].upd) handle({ type: 'heart', id: list[radarFocus].id });
+  else if (k === 'ArrowRight' && list[radarFocus] && !list[radarFocus].redzone && !list[radarFocus].upd && !list[radarFocus].view) handle({ type: 'heart', id: list[radarFocus].id });
+  else if (k === 'Enter' && list[radarFocus] && list[radarFocus].view) cycleView();   // the list stays open to switch again
   else if (k === 'Enter' && list[radarFocus]) {
     if (list[radarFocus].upd) startUpdate();
     else if (list[radarFocus].redzone) watchRedZone();
@@ -1870,11 +1907,12 @@ function closeSettings() {
   document.documentElement.classList.remove('settings');
 }
 addEventListener('message', e => { if (e.origin === location.origin && e.data && e.data.ftv === 'close') closeSettings(); });
-function openRadar() { radarOpen = true; radarFocus = 0; $('#radar').classList.add('on'); renderRadar(); }
+function openRadar() { radarOpen = true; radarFocus = firstRow(); $('#radar').classList.add('on'); renderRadar(); }
 
 if (phone) {
   $('#pbGames').onclick = e => { e.stopPropagation(); radarOpen ? onKey({ key: 'Escape', preventDefault() {} }) : openRadar(); };
   $('#pbSettings').onclick = e => { e.stopPropagation(); openSettings(); };
+  $('#pbView').onclick = e => { e.stopPropagation(); cycleView(); };
   const key = k => onKey({ key: k, repeat: false, preventDefault() {} });
   document.addEventListener('click', e => {
     if (settingsOpen || tour.on) return;

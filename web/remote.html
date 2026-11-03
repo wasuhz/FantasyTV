@@ -64,6 +64,11 @@
   .log { font: 500 12px/1.6 var(--mono); color: var(--muted); padding: 0 2px; }
   .empty { text-align: center; color: var(--muted); padding: 40px 10px; font: 500 14px/1.5 var(--mono); }
   #gear { margin-left: 4px; }
+  /* On screen: Full, Scores only (your leagues' scores, nothing else) or Clean (just the game) */
+  .views { display: flex; align-items: center; gap: 6px; margin-top: 10px; }
+  .views span { font: 700 11px/1 var(--mono); letter-spacing: .14em; color: var(--dim); margin-right: 4px; }
+  .views button { flex: 1; border: 1px solid var(--line); background: var(--panel); border-radius: 6px; padding: 9px 6px; font: 700 12px/1 var(--mono); color: var(--muted); }
+  .views button.on { background: var(--cyan); border-color: var(--cyan); color: #fff; }
   .rw { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
   .rw button { border: 1px solid var(--line); background: var(--panel); border-radius: 6px; padding: 9px 12px; font: 700 12px/1 var(--mono); color: var(--text); }
   .rw .live { margin-left: auto; color: var(--lime); border-color: var(--lime); }
@@ -212,6 +217,7 @@
     <button class="ib" id="gear" aria-label="Settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button></div>
   <div class="at"><div style="flex:1"><b>AUTOTUNE</b><br><small id="atText">Waiting for the TV…</small></div><button class="switch" id="atSwitch" aria-label="AutoTune"></button></div>
   <button type="button" class="watch" id="rzBtn" hidden style="width:100%;margin:8px 0 0;background:none;border-color:var(--red);color:var(--text)">WATCH NFL REDZONE</button>
+  <div class="views" id="views"><span>ON SCREEN</span><button type="button" data-view="full">Full</button><button type="button" data-view="scores">Scores only</button><button type="button" data-view="clean">Clean</button></div>
   <div class="rw"><button data-rw="10">⏪ 10s</button><button data-rw="30">⏪ 30s</button><span id="rwText"></span><button data-rw="0" class="live">LIVE</button></div>
 </header>
 <div class="pending" id="pending"><div class="t"><small>SWITCHING TO</small><span id="pTo"></span></div><span class="s" id="pSecs"></span><button id="pCancel">CANCEL</button></div>
@@ -269,6 +275,7 @@
     <div class="card">
       <div class="section">ON SCREEN</div>
       <label class="chk">Matchup scores on the TV (you vs your opponent, each league)<input type="checkbox" name="showMatchups"></label>
+      <label class="chk">NFL RedZone switches to Scores only (your leagues' scores, no player cards or clock)<input type="checkbox" name="rzScores"></label>
       <label class="chk">Hide spoilers on this phone<input type="checkbox" name="hideSpoilers"></label>
       <small>The game on the TV shows no score or points here, since your phone is ahead of the stream.</small>
       <label>Favorite teams (their games always count as hearted)<input name="favTeams" placeholder="NO, DAL" autocapitalize="characters"></label>
@@ -493,6 +500,7 @@ function draw() {
   document.getElementById('count').textContent = `${live.length} LIVE · ${s.games.length} GAMES`;
   const sw = document.getElementById('atSwitch');
   sw.classList.toggle('on', !s.paused);
+  for (const b of document.querySelectorAll('#views button')) b.classList.toggle('on', b.dataset.view === (s.view || 'full'));
   const cur = s.games.find(g => g.id === s.current);
   document.getElementById('rzBtn').hidden = !s.redZoneOpen || s.redZone;
   if (!cfg.sleeper && !s.user) document.getElementById('atText').textContent = 'Finish setup: Settings, then SAVE TO TV.';
@@ -566,12 +574,19 @@ document.addEventListener('click', e => {
 for (const b of document.querySelectorAll('[data-rw]')) b.onclick = () => { link.send({ type: 'rewind', seconds: +b.dataset.rw }); setTimeout(refresh, 600); };
 document.getElementById('rzBtn').onclick = () => { link.send({ type: 'redzone' }); setTimeout(refresh, 600); };
 document.getElementById('tourBtn').onclick = () => link.send({ type: 'tour' });   // replays the first-launch remote tour
-document.getElementById('atSwitch').onclick = () => { if (state) { link.send({ type: 'pause', on: !state.paused }); setTimeout(refresh, 300); } };
+document.getElementById('views').addEventListener('click', e => {
+  const b = e.target.closest('[data-view]');
+  if (!b || !state) return;
+  for (const x of document.querySelectorAll('#views button')) x.classList.toggle('on', x === b);   // shows at once
+  link.send({ type: 'view', v: b.dataset.view });
+  setTimeout(refresh, 300);
+});
+document.getElementById('atSwitch').onclick =() => { if (state) { link.send({ type: 'pause', on: !state.paused }); setTimeout(refresh, 300); } };
 document.getElementById('pCancel').onclick = () => { link.send({ type: 'cancel' }); setTimeout(refresh, 300); };
 
 // Settings live on the TV (/api/config); saving restarts the TV page with them.
 const form = document.getElementById('settings');
-const DEFAULTS = { sleeper: '', mode: 'live', delay: 30, cooldown: 75, iptvBase: '', xtServer: '', xtUser: '', xtPass: '', stalkerPortal: '', stalkerMac: '', iptvSource: 'auto',
+const DEFAULTS = { sleeper: '', mode: 'live', delay: 30, rzScores: true, cooldown: 75, iptvBase: '', xtServer: '', xtUser: '', xtPass: '', stalkerPortal: '', stalkerMac: '', iptvSource: 'auto',
   hideSpoilers: true, showOpp: false, lookahead: true, pointsPopups: true, swingAlerts: true, dangerAlerts: false, injuryAlerts: true, popupTiming: 'now', popupDelay: 25, autoUpdate: true, splitScreen: true, showMatchups: true, oppWeight: 0, favTeams: '', blackout: '', skipLeagues: [], tracked: [], espnLeagues: [], bugSamples: false, perf: 'auto', tunePreset: 'balanced', alertsPreset: 'quiet', popupMin: 5, tdHere: 'full', tdAway: 'small' };
 let cfg = { ...DEFAULTS };
 document.getElementById('gear').onclick = async () => {
