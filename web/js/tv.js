@@ -585,7 +585,8 @@ async function tune(id, why) {
 function playStream(url) {
   const v = $('#video');
   if (native) {
-    native.play(url);
+    // Rewind off: straight from the server. Smooth playback (tunneling) off: only if Settings says so.
+    native.play(url + (rewindOn() ? '' : '#norewind') + (settings.tunnel === false ? '#notunnel' : ''));
     setVideo(true);
   } else if (window.mpegts && mpegts.isSupported()) {
     player = mpegts.createPlayer({ type: 'mpegts', isLive: true, url: location.origin + proxied(url) },
@@ -639,7 +640,13 @@ function unsplit() {
 // How far behind live the picture plays after a rewind; the tag says so, and Up (or the phone) goes back to live.
 let behind = 0, rewindAsked = 0;
 /** Rewind seconds more on the main picture (0 = back to live). */
-function rewindBy(seconds) { if (!native) return; rewindAsked = seconds; native.rewind(seconds); }
+// Rewind: on unless turned off in Settings, and off by default on a lower-powered TV (it made the picture stutter there).
+const rewindOn = () => settings.rewind ?? !(native && native.lowPower && native.lowPower());
+function rewindBy(seconds) {
+  if (!native) return;
+  if (!rewindOn()) { if (seconds > 0) toast('Rewind is off on this TV: turn it on in phone Settings'); return; }
+  rewindAsked = seconds; native.rewind(seconds);
+}
 window.ftvRewound = secs => {
   behind = secs;
   const tag = $('#rewind');
@@ -827,7 +834,7 @@ function publish() {
     playStats, popupsWaiting: popups.length, ad: { misses: bugMisses, game: bugGame, on: auto.adOn }, readClock, channelDelays: settings.channelDelays || {}, delaySamples,
     matchups: matchupsNow(), channels: channelMap, channelNames, iptv: !!iptv, bigPlays: bigPlays.map(b => ({ game: b.game, at: b.at, who: b.who ? b.who.short : b.team, td: b.td, yards: b.yards })),
     log: auto.log.slice(0, 12), delay: settings.delay, away, rosterAt, out: prefs.out,
-    hideSpoilers: settings.hideSpoilers !== false, waiting: !!(auto.pending && auto.pending.waiting),
+    hideSpoilers: settings.hideSpoilers !== false, rewind: rewindOn(), waiting: !!(auto.pending && auto.pending.waiting),
     games: ranked.map(g => ({ id: g.id, away: g.away, home: g.home, state: g.state, statusName: g.statusName, period: g.period,
       clock: g.clock, start: g.start, network: g.network, sit: g.sit, onBreak: g.onBreak, breakWhy: g.breakWhy, signal: g.signal,
       value: g.value, fav: g.fav, skip: g.skip, players: g.players })),
@@ -855,7 +862,8 @@ function render() {
 
 /** A team in the score bug: its logo (ESPN's, for dark backgrounds) over a stripe of its colour, and its record.
  *  No logo (offline, a new team): its name instead. */
-const bugTeam = (t, timeouts) => `<div class="t" style="--team:${t.color}">`
+// The home team mirrors the away team (record, then logo), so both logos sit on the outer edges.
+const bugTeam = (t, timeouts, home = false) => `<div class="t${home ? ' home' : ''}" style="--team:${t.color}">`
   + `<img src="${esc(t.darkLogo || t.logo || '')}" alt="${esc(t.abbr)}" onerror="this.replaceWith(Object.assign(document.createElement('span'), { textContent: this.alt }))">`
   + '<span class="tr">' + (t.record ? `<small>${esc(t.record)}</small>` : '')
   // Timeouts left: three dots, the used ones dim (ESPN sends them while the game is on).
@@ -917,7 +925,7 @@ function renderBug(g) {
     <div class="c clk ${m.crunch ? 'crunch' : ''}">${clockHtml(g)}</div>
     ${ddText ? `<div class="c dd cap ${m.firstDown ? 'gold fd' : rz ? 'rz' : 'blue'}" style="${m.fdStyle}">${ddText}</div>` : ''}
     <div class="s ${pc('home')} ${fh.cls}" style="${fh.style}${m.possStyle}">${g.home.score}</div>
-    ${bugTeam(g.home, g.sit && g.sit.homeTO)}`);
+    ${bugTeam(g.home, g.sit && g.sit.homeTO, true)}`);
 }
 
 
@@ -1379,7 +1387,7 @@ setInterval(() => {
   if (!g) return;
   const mine = g.players.filter(p => !p.opp && !p.bench);
   if (!mine.length) return;
-  $('#final').innerHTML = `<div class="hd"><span class="tag">FINAL</span>${bugTeam(g.away)}<b>${g.away.score}</b><span class="muted">–</span><b>${g.home.score}</b>${bugTeam(g.home)}</div>`
+  $('#final').innerHTML = `<div class="hd"><span class="tag">FINAL</span>${bugTeam(g.away)}<b>${g.away.score}</b><span class="muted">–</span><b>${g.home.score}</b>${bugTeam(g.home, undefined, true)}</div>`
     + mine.slice(0, 5).map(p => `<div class="row"><span class="nm">${esc(p.short)} <small>${p.pos}</small></span><span class="ln">${esc(p.line) || '&nbsp;'}</span><b>${pts(p.pts)}</b></div>`).join('');
   $('#final').classList.add('on');
   setTimeout(() => $('#final').classList.remove('on'), 15000);
@@ -1488,6 +1496,14 @@ function showPopups() {
   popups = popups.filter(p => p.showAt > now && now - p.showAt < 120e3);
   for (const p of due) {
     playStats.shown++;
+    // Your player in the game you're watching, with his card on screen: you saw the play and his card shows the
+    // points, so no popup. His card still lights up, and a touchdown still gets its whole moment.
+    const watching = p.game && (p.game === auto.current || (split && split.game === p.game));
+    if (p.kind !== 'alert' && watching && $(`#rail .card[data-pid="${p.who.id}"]:not(.away)`)) {
+      if (p.td) { flashTd(p.team.color); if (!bigShot(p)) tdBanner(p); }
+      cardHit[p.who.id] = { at: Date.now(), pts: p.pts, color: p.team.color, td: !!p.td };
+      continue;
+    }
     const el = document.createElement('div');
     el.className = 'pop';
     el.style.setProperty('--team', p.team.color);

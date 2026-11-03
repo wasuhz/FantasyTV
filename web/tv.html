@@ -377,6 +377,8 @@
   .card.hit::after, .card.td::after { opacity: .85; }
   .card .ln { overflow: visible; text-overflow: clip; color: #dfe7f3; text-shadow: 0 1px 2px #000, 0 0 6px rgba(0,0,0,.95), 0 0 14px rgba(1,20,46,.9); }   /* the whole line, readable over the photo */
   #bug .t .tr { display: flex; flex-direction: column; align-items: flex-start; gap: 5px; }
+  #bug .t.home, #final .t.home { flex-direction: row-reverse; padding: 0 12px 0 16px; }   /* home: record, then logo, mirroring the away side */
+  #bug .t.home .tr { align-items: flex-end; }
   #bug .t .tos { display: flex; gap: 4px; }
   #bug .t .tos i { width: 9px; height: 4px; border-radius: 2px; background: rgba(255,255,255,.18); }
   #bug .t .tos i.on { background: #fff; }
@@ -472,6 +474,17 @@
 </head>
 <body>
 <div id="stage">
+<script>
+  // Scaled to the screen straight away, before anything is drawn (tv.js waits for the scripts at the end of the page,
+  // and until then the 1920×1080 screen showed unscaled: the centred logo sat in the bottom right, then jumped).
+  (function () {
+    var w = document.documentElement.clientWidth || innerWidth, h = document.documentElement.clientHeight || innerHeight;
+    var s = Math.min(w / 1920, h / 1080), st = document.getElementById('stage');
+    st.style.transform = 'scale(' + s + ')';
+    st.style.left = (w - 1920 * s) / 2 + 'px';
+    st.style.top = (h - 1080 * s) / 2 + 'px';
+  })();
+</script>
   <div id="field">
     <div class="ez l"><span></span></div><div class="ez r"><span></span></div>
     <div class="lines"></div>

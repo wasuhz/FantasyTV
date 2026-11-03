@@ -20,6 +20,7 @@ import androidx.media3.datasource.DefaultHttpDataSource;
 import androidx.media3.exoplayer.DefaultLoadControl;
 import androidx.media3.exoplayer.DefaultRenderersFactory;
 import androidx.media3.exoplayer.ExoPlayer;
+import androidx.media3.exoplayer.trackselection.DefaultTrackSelector;
 import androidx.media3.exoplayer.hls.DefaultHlsExtractorFactory;
 import androidx.media3.exoplayer.hls.HlsMediaSource;
 import androidx.media3.exoplayer.source.MediaSource;
@@ -57,6 +58,8 @@ final class Playback {
     private final Listener listener;
     private final Handler main = new Handler(Looper.getMainLooper());
     final ExoPlayer player;
+    private final DefaultTrackSelector tracks;
+    private boolean tunnel = true;   // the main picture: tunneled unless Settings turns it off ("#notunnel")
     private final DefaultHttpDataSource.Factory http;
     private final DefaultExtractorsFactory extractors;
     private final int originalMode;
@@ -98,7 +101,11 @@ final class Playback {
                         | DefaultTsPayloadReaderFactory.FLAG_ALLOW_NON_IDR_KEYFRAMES)
                 .setTsExtractorTimestampSearchBytes(1500 * 188);
 
-        player = new ExoPlayer.Builder(a, renderers).setLoadControl(load).build();
+        // Tunneled playback (the way TiviMate plays smoothly on ordinary TV boxes): the decoder hands frames straight to
+        // the display hardware, which keeps them in step with the sound, instead of this app timing every frame on a CPU
+        // that may be too slow to do it evenly. The split-screen picture stays normal (two tunnels at once is too much).
+        tracks = new DefaultTrackSelector(a);
+        player = new ExoPlayer.Builder(a, renderers).setLoadControl(load).setTrackSelector(tracks).build();
         player.setVideoSurfaceView(surface);
         player.setVideoScalingMode(C.VIDEO_SCALING_MODE_SCALE_TO_FIT);
         if (side) player.setVolume(0f);
@@ -135,11 +142,18 @@ final class Playback {
 
     void play(String newUrl) {
         if (newUrl == null) return;
+        // "#norewind" on the end: Rewind is off in settings, so the channel plays straight from the server (less work
+        // for a slower TV).
+        boolean noTunnel = newUrl.endsWith("#notunnel");   // Settings: smooth playback (tunneling) off, for a TV it upsets
+        if (noTunnel) newUrl = newUrl.substring(0, newUrl.length() - "#notunnel".length());
+        boolean noRewind = newUrl.endsWith("#norewind");
+        if (noRewind) newUrl = newUrl.substring(0, newUrl.length() - "#norewind".length());
+        tunnel = !side && !noTunnel;
         url = newUrl;
         retries = 0;
         back = 0;
         // The main picture reads through the rewind buffer (plain MPEG-TS channels; HLS plays direct).
-        shifted = !side && !isHls(newUrl);
+        shifted = !side && !isHls(newUrl) && !noRewind;
         if (shifted) TvServer.timeshift.tune(newUrl);
         open();
     }
@@ -193,6 +207,7 @@ final class Playback {
         synchronized (stamps) { stampCount = 0; }
         lastPos = -1;
         lastMove = System.currentTimeMillis();
+        tracks.setParameters(tracks.buildUponParameters().setTunnelingEnabled(tunnel));
         player.setMediaSource(source(shifted
                 ? "http://127.0.0.1:" + TvServer.PORT + "/ts?back=" + back + "&n=" + (opens++)
                 : url));

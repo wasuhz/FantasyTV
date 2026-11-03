@@ -1,5 +1,7 @@
 package com.fantasytv.app;
 
+import android.content.Context;
+import android.content.SharedPreferences;
 import android.graphics.Bitmap;
 import android.os.Handler;
 import android.os.HandlerThread;
@@ -53,16 +55,37 @@ final class ClockReader {
     private final HandlerThread copyThread = new HandlerThread("ClockCopy");
     private final Handler copy;
     private final ExecutorService work = Executors.newSingleThreadExecutor();
-    private final TextRecognizer recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS);
+    private TextRecognizer recognizer;   // made on the first read (loading it is the risky part on some chips)
     private volatile boolean active, paused, busy;
 
-    ClockReader(SurfaceView view, Listener listener) {
+    /**
+     * Crash breaker. Google's text recognition kills the whole app with an illegal instruction on some TV chips (a
+     * MediaTek Hisense, for one), and that can't be caught. So a note goes down before each read and comes off after:
+     * still there at the next start means the read crashed us, and clock reading stays off on this TV for good (the
+     * stream delay setting and the phone's clock sync still work). After a few good reads the chip is fine: no more notes.
+     */
+    private static final String PREFS = "clock", IN_FLIGHT = "inFlight", OFF = "off", GOOD = "good";
+    private final SharedPreferences prefs;
+    private final boolean off;
+    private int good;
+
+    ClockReader(Context context, SurfaceView view, Listener listener) {
         this.view = view;
         this.listener = listener;
+        prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+        if (prefs.getBoolean(IN_FLIGHT, false)) {
+            Log.w(TAG, "the last clock read crashed the app: clock reading is off on this TV");
+            prefs.edit().putBoolean(IN_FLIGHT, false).putBoolean(OFF, true).commit();
+        }
+        off = prefs.getBoolean(OFF, false);
+        good = prefs.getInt(GOOD, 0);
         copyThread.start();
         copy = new Handler(copyThread.getLooper());
-        main.postDelayed(this::tick, EVERY_MS);
+        if (!off) main.postDelayed(this::tick, EVERY_MS);
     }
+
+    /** False when the crash breaker turned clock reading off on this TV. */
+    boolean works() { return !off; }
 
     void setActive(boolean on) { active = on; }
     void setPaused(boolean on) { paused = on; }
@@ -71,7 +94,7 @@ final class ClockReader {
         main.removeCallbacksAndMessages(null);
         copyThread.quitSafely();
         work.shutdownNow();
-        recognizer.close();
+        if (recognizer != null) recognizer.close();
     }
 
     private void tick() {
@@ -96,9 +119,13 @@ final class ClockReader {
         try {
             bottom = Bitmap.createBitmap(frame, 0, 504, 1280, 216);        // bottom 30%: the score bug
             corner = Bitmap.createBitmap(frame, 893, 0, 387, 127);         // top right: the network logo
+            boolean proven = good >= 3;   // this chip has read fine before: no need for the note
+            if (!proven) prefs.edit().putBoolean(IN_FLIGHT, true).commit();   // written now, before anything can crash
+            if (recognizer == null) recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS);
             Task<Text> b = recognizer.process(InputImage.fromBitmap(bottom, 0));
             Task<Text> c = recognizer.process(InputImage.fromBitmap(corner, 0));
             Text bt = Tasks.await(b), ct = Tasks.await(c);
+            if (!proven) prefs.edit().putBoolean(IN_FLIGHT, false).putInt(GOOD, ++good).apply();
             int[] got = parse(bt);
             boolean logo = LOGO.matcher(ct.getText().toUpperCase(Locale.ROOT)).find()
                     || LOGO.matcher(bt.getText().toUpperCase(Locale.ROOT)).find();   // some networks put it bottom right

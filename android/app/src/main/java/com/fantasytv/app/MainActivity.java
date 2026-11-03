@@ -69,7 +69,7 @@ public class MainActivity extends Activity {
         sidePlayback = new Playback(this, sideSurface, state -> {
             if (state.equals("dead")) web.evaluateJavascript("window.ftvSide && ftvSide('dead')", null);
         }, true);
-        clock = new ClockReader(surface, (period, seconds, logo, at) -> main.post(() ->
+        clock = new ClockReader(this, surface, (period, seconds, logo, at) -> main.post(() ->
                 web.evaluateJavascript("window.ftvClock && ftvClock(" + period + "," + seconds + "," + at + "," + logo + ")", null)));
 
         WebView.setWebContentsDebuggingEnabled(true);
@@ -115,6 +115,17 @@ public class MainActivity extends Activity {
         /** Split screen: this channel on the right (muted), the main one moves left. Null or empty: back to one. */
         /** This app's version, for the page and the phone. */
         @JavascriptInterface public String version() { return BuildConfig.VERSION_NAME; }
+        /** False when this TV can't read the game clock off the picture (its chip crashed Google's text recognition). */
+        @JavascriptInterface public boolean clockWorks() { return clock.works(); }
+        /**
+         * A lower-powered TV (a 32-bit chip, or under 2.5 GB of memory): the 60-second rewind buffer costs it enough to
+         * make the picture stutter, so Rewind starts off there (it can still be turned on in Settings).
+         */
+        @JavascriptInterface public boolean lowPower() {
+            android.app.ActivityManager.MemoryInfo m = new android.app.ActivityManager.MemoryInfo();
+            ((android.app.ActivityManager) getSystemService(ACTIVITY_SERVICE)).getMemoryInfo(m);
+            return android.os.Build.SUPPORTED_64_BIT_ABIS.length == 0 || m.totalMem < 2_500_000_000L;
+        }
         /** Whether Android lets FantasyTV install its own updates ("Install unknown apps"). */
         @JavascriptInterface public boolean canInstall() { return getPackageManager().canRequestPackageInstalls(); }
         /** Opens that setting for FantasyTV (Android closes the app when it's switched on; it reopens on setup). */
