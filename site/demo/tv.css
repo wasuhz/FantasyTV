@@ -1,0 +1,460 @@
+  html, body { overflow: hidden; background: #000; }
+  /* TV app: ExoPlayer is under the page, so once a channel plays the page is see-through apart from its overlays */
+  html.native.playing, html.native.playing body, html.native.playing #stage { background: transparent; }
+  html.playing #field, html.playing #idle { display: none !important; }
+  #stage { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; transform-origin: 0 0; overflow: hidden; background: #000; }
+
+  /* the picture */
+  #video, #field { position: absolute; inset: 0; width: 100%; height: 100%; }
+  #video { object-fit: contain; background: #000; display: none; }
+  #video.on { display: block; }
+  #field { background: repeating-linear-gradient(90deg, #2f6b33 0 96px, #2a6230 96px 192px); }
+  #field .ez { position: absolute; top: 0; bottom: 0; width: 160px; display: flex; align-items: center; justify-content: center; }
+  #field .ez span { writing-mode: vertical-rl; font: 700 84px/1 var(--sans); letter-spacing: .12em; color: rgba(255,255,255,.85); }
+  #field .ez.l { left: 0; } #field .ez.l span { transform: rotate(180deg); }
+  #field .ez.r { right: 0; }
+  #field .yl { position: absolute; top: 0; bottom: 0; width: 3px; background: rgba(255,255,255,.55); }
+  #field .num { position: absolute; font: 700 54px/1 var(--sans); color: rgba(255,255,255,.6); }
+  #field .los { position: absolute; top: 0; bottom: 0; width: 6px; background: #3b82f6; box-shadow: 0 0 12px #3b82f6; transition: left .8s; }
+  #field .fd { position: absolute; top: 0; bottom: 0; width: 6px; background: #facc15; box-shadow: 0 0 12px #facc15; transition: left .8s; }
+  #field .ball { position: absolute; top: 470px; width: 34px; height: 20px; border-radius: 50%; background: #7c3f12; border: 2px solid #fff3; transition: left .8s; }
+  #field .play { position: absolute; left: 50%; top: 70px; transform: translateX(-50%); padding: 12px 22px; background: var(--panel);
+    border-radius: 22px; font: 600 26px/1.2 var(--sans); max-width: 1200px; text-align: center; }
+  #field .demo { position: absolute; right: 190px; top: 30px; font: 600 16px/1 var(--mono); color: rgba(255,255,255,.55); letter-spacing: .1em; }
+  #field .brk { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; flex-direction: column; gap: 18px;
+    background: var(--panel); font: 700 64px/1 var(--sans); }
+  #field .brk small { font: 500 26px/1 var(--mono); color: var(--muted); }
+  #field.break .brk { display: flex; }
+
+  /* callouts, top left */
+  #callouts { position: absolute; left: 70px; top: 70px; display: flex; flex-direction: column; align-items: flex-start; gap: 10px;
+    opacity: 0; transform: translateY(-10px); transition: .4s; }
+  #callouts.on { opacity: 1; transform: none; }
+  #callouts div { font: 700 46px/1 var(--sans); padding: 12px 20px; border-radius: 12px; }
+  #callouts .red { background: var(--red); }
+  #callouts .dark { background: var(--panel); }
+
+  /* switching countdown, top centre */
+  /* full-width bar across the top of the picture, like a broadcast's "coming up" strip */
+  #countdown { position: absolute; left: 0; right: 0; top: 0; transform: translateY(-110%); transition: transform .35s;
+    background: var(--panel); border-bottom: 1px solid var(--line); overflow: hidden; }
+  #countdown.on { transform: none; }
+  #countdown .row > .mk { padding: 0 26px; }
+  #countdown .row > .mk .logo-mark { width: 64px; height: 64px; }
+  #countdown .row { display: flex; align-items: stretch; height: 124px; }
+  #countdown .row > * { display: flex; align-items: center; padding: 0 22px; border-right: 1px solid var(--line); }
+  #countdown .lbl { font: 700 18px/1.15 var(--mono); color: var(--amber); letter-spacing: .08em; }
+  #countdown .teams { gap: 18px; flex: 1; font: 700 44px/1 var(--sans); }
+  #countdown .teams { padding: 0 !important; gap: 0 !important; }
+  #countdown .teams b { align-self: stretch; display: flex; align-items: center; justify-content: center; padding: 0 40px; min-width: 220px; font-size: 50px; }
+  #countdown .teams .muted { padding: 0 24px; }
+  #countdown .teams > span:last-child { padding: 0 24px; }
+  #countdown .teams b img { height: 104px; width: auto; display: block; filter: drop-shadow(0 4px 10px rgba(0,0,0,.45)); }   /* team logos, not names */
+  #countdown .why { font: 500 22px/1.2 var(--sans); color: var(--muted); max-width: 300px; }
+  #countdown .secs { font: 700 54px/1 var(--mono); color: var(--amber); min-width: 150px; justify-content: center; }
+  #countdown .cancel { border: 3px solid var(--cyan); margin: 10px; border-radius: 18px; font: 700 20px/1 var(--mono); letter-spacing: .1em;
+    background: var(--tint); padding: 0 26px; border-right: 3px solid var(--cyan); }
+  #countdown .prog { height: 8px; background: var(--panel-2); }
+  #countdown.on ~ #callouts { top: 160px; }
+  #countdown .prog i { display: block; height: 100%; background: var(--amber); width: 0; }
+
+  /* lower third: score bug and your players */
+  #lower { position: absolute; left: 60px; right: 60px; bottom: 8px; transition: transform .4s, opacity .4s; }
+  #lower.hide { transform: translateY(120%); opacity: 0; }
+  /* AutoTune on/off, left of the score bug, above your players */
+  #atTag { position: absolute; left: 0; bottom: 162px; display: flex; align-items: center; gap: 10px; padding: 9px 14px;
+    background: var(--panel); border: 1px solid var(--cyan-dim); border-radius: 18px; font: 600 18px/1 var(--mono); color: var(--muted); letter-spacing: .06em; }
+  #atTag b { color: var(--cyan); font-weight: 700; }
+  #atTag .k { font-size: 13px; color: var(--muted); border: 1px solid var(--line); border-radius: 9px; padding: 3px 6px; }
+  #atTag.off { border-color: var(--amber); }
+  #atTag.off b { color: var(--amber); }
+  #bug { display: flex; justify-content: center; margin-bottom: -2px; }
+  #bug .in { display: flex; align-items: stretch; background: var(--panel); border: 1px solid var(--line); border-bottom: 0; border-radius: 22px 22px 0 0; overflow: hidden; height: 64px; }
+  #bug .t { display: flex; flex-direction: row; align-items: center; justify-content: center; gap: 10px; padding: 0 16px 0 12px; font: 700 30px/1 var(--sans); min-width: 120px;
+    box-shadow: inset 0 -5px 0 var(--team); }   /* logo over a stripe of the team colour */
+  #bug .t img { height: 62px; width: auto; display: block; margin: -4px -6px -6px; }   /* ESPN pads its logos */
+  #bug .t small { font: 700 19px/1 var(--mono); color: rgba(255,255,255,.85); letter-spacing: .04em; }   /* season record */
+  #bug .s { display: flex; align-items: center; padding: 0 22px; font: 700 36px/1 var(--mono); }
+  #bug .s.poss::after { content: ''; width: 0; height: 0; border: 8px solid transparent; border-left-color: var(--amber); margin-left: 10px; }
+  #bug .c { display: flex; align-items: center; padding: 0 22px; font: 600 24px/1 var(--mono); color: var(--muted); border-left: 1px solid var(--line); }
+  #bug .c.rz { color: #fff; background: var(--red); }
+  #rail { display: flex; background: var(--panel); border: 1px solid var(--line); border-radius: 22px; height: 150px; overflow: hidden; }
+  #rail .cards { min-width: 0; flex-shrink: 1; }   /* the cards give way before the matchups do */
+  .card { flex: 0 1 auto; min-width: 240px; width: 318px; padding: 12px 20px 11px; border-right: 1px solid var(--line); display: flex; flex-direction: column; gap: 5px; }
+  .card.lead { width: 370px; background: linear-gradient(90deg, rgba(232,32,46,.16), transparent); box-shadow: inset 5px 0 0 var(--cyan); }
+  .card .nm { display: flex; align-items: center; gap: 10px; font: 600 24px/1 var(--sans); white-space: nowrap; overflow: hidden; }
+  .card .pos { font: 700 13px/1 var(--mono); color: var(--cyan); border: 1px solid var(--cyan-dim); padding: 3px 5px; border-radius: 9px; }
+  .card .st { font: 600 18px/1 var(--mono); color: var(--muted); }
+  .card .st.rz { color: var(--red); } .card .st.on { color: var(--green); }
+  .card .p { display: flex; align-items: baseline; gap: 12px; }
+  .card .p b { font: 700 40px/1 var(--mono); }
+  .card .p small { font: 600 22px/1 var(--mono); color: var(--muted); }
+  .card .ln { font: 600 20px/1.15 var(--mono); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .card.bench { opacity: .55; }
+  #rail .fill { flex: 1; display: flex; align-items: center; justify-content: center; }
+  #rail .fill .wm { height: 86px; opacity: .7; }
+  /* your starters in other games, filling spare room: a step back from the game on screen */
+  .card.away { opacity: .72; background: rgba(255,255,255,.02); }
+  .card .gm { color: var(--text); margin-right: 10px; }
+  #rail .pair { flex: none; display: flex; align-items: center; gap: 16px; padding: 0 20px; border-left: 1px solid var(--line); }
+  #rail .pair .qr { background: #fff; padding: 6px; border-radius: 12px; width: 118px; height: 118px; }
+  #rail .pair .qr img, #rail .pair .qr canvas { width: 106px !important; height: 106px !important; }
+  #rail .pair .meta { display: flex; flex-direction: column; gap: 10px; font: 600 14px/1.2 var(--mono); color: var(--muted); }
+  #rail .pair .meta .chip { padding: 6px 8px; border-radius: 9px; border: 1px solid var(--cyan-dim); color: var(--cyan); text-align: center; }
+  #rail .pair .meta .chip.off { border-color: var(--amber); color: var(--amber); }
+
+  /* radar list, left */
+  #radar { position: absolute; left: 0; top: 0; bottom: 0; width: 620px; z-index: 35;   /* above the bar and its cards */
+    background: var(--panel); border-right: 1px solid var(--line);
+    transform: translateX(-102%); transition: transform .3s; display: flex; flex-direction: column; }
+  #radar.on { transform: none; }
+  #radar header { display: flex; align-items: center; gap: 14px; padding: 34px 30px 20px; font: 700 18px/1 var(--mono); letter-spacing: .14em; color: var(--muted); }
+  #radar header .n { margin-left: auto; }
+  #radar .list { flex: 1; overflow: hidden; padding: 0 20px 20px; display: flex; flex-direction: column; gap: 12px; }
+  .rg { border: 1px solid var(--line); border-radius: 22px; background: var(--panel); padding: 14px 18px; display: flex; flex-direction: column; gap: 8px; }
+  .rg.cur { border-top: 3px solid var(--cyan); }
+  .rg.focus { outline: 3px solid var(--cyan); outline-offset: 2px; }
+  .rg.dim { opacity: .5; }
+  .rg .top { display: flex; align-items: center; gap: 14px; font: 700 26px/1 var(--sans); }
+  .rg .top .sc { margin: 0 auto; font-family: var(--mono); }
+  .rg .sub { font: 500 16px/1 var(--mono); color: var(--muted); display: flex; gap: 10px; align-items: center; }
+  .rg .pl { display: flex; justify-content: space-between; font: 500 17px/1.3 var(--mono); }
+  .rg .pl .rz { color: var(--red); } .rg .pl .on { color: var(--green); }
+  .rg .ch { font: 600 15px/1.2 var(--mono); color: var(--cyan); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #radar .list .more { text-align: center; font: 600 15px/1 var(--mono); color: var(--dim); padding: 4px; }
+  #radar footer { padding: 16px 26px 24px; display: flex; gap: 20px; align-items: center; }
+  #radar footer .keys { display: flex; flex-direction: column; gap: 9px; font: 700 30px/1.15 var(--mono); color: #fff; }   /* readable from the couch */
+  #radar footer .keys b { display: inline-block; min-width: 84px; color: var(--cyan); font-weight: 800; }
+  #radar footer .keys .pair { margin-top: 6px; font-size: 25px; color: #dfe6f2; }
+  #radar footer .keys .why { display: block; margin: 3px 0 2px 84px; font: italic 600 20px/1.1 var(--mono); color: #b9c6da; }   /* what a heart does */
+  #radar footer .qr { background: #fff; padding: 5px; border-radius: 12px; flex: none; }
+  #radar footer .qr img, #radar footer .qr canvas { width: 132px !important; height: 132px !important; display: block; }
+  /* your matchups, right end of the player bar: one line per league */
+  .mu { flex: none; display: flex; flex-direction: column; justify-content: center; gap: 8px; padding: 0 16px 0 10px; border-left: 1px solid var(--line); width: 500px; box-sizing: border-box; }   /* one width: long names shorten with … instead of resizing it */
+  /* a page of two matchups; with more leagues the pages scroll up like one strip, the next right behind (transform only: smooth on any box) */
+  .mu { position: relative; overflow: hidden; }
+  .mu .pg { flex: 1 0 100%; display: flex; flex-direction: column; justify-content: center; gap: 8px; }
+  .mu .pg.in { animation: muin .8s cubic-bezier(.65,0,.35,1) both; }
+  .mu .pg.out { position: absolute; left: 10px; right: 16px; top: 0; bottom: 0; pointer-events: none; animation: muout .8s cubic-bezier(.65,0,.35,1) both; }
+  @keyframes muin { from { transform: translateY(100%); } to { transform: none; } }
+  @keyframes muout { from { transform: none; } to { transform: translateY(-100%); } }
+  .mu .ln { display: grid; grid-template-columns: 1fr 86px 18px 86px 1fr; align-items: center; gap: 10px; font: 600 20px/1 var(--mono); }   /* both scores the same width, so "vs" is dead centre on every row */
+  .mu .ln .a, .mu .ln .b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--muted); font: 600 16px/1 var(--sans); }
+  .mu .ln .b { text-align: right; }
+  .mu .ln .s { font: 700 26px/1 var(--mono); white-space: nowrap; }
+  .mu .ln .s:nth-child(2) { text-align: right; } .mu .ln .s:nth-child(4) { text-align: left; }   /* each score hugs the "vs" */
+  .mu .ln .s.win { color: var(--green); } .mu .ln .s.lose { color: var(--text); }
+  .mu .ln .v { color: var(--dim); text-align: center; font-size: 14px; }
+  /* 🔥: a hot matchup (10+ in 10 minutes) at the corner of your score; a 20-point player beside his name. Flickers gently (opacity only). */
+  .fire { display: inline-block; font-style: normal; animation: fireflick 1.6s ease-in-out infinite alternate; }
+  .mu .ln .s .n { position: relative; display: inline-block; }
+  .mu .ln .s .fire { position: absolute; right: 100%; top: 50%; transform: translateY(-50%); margin-right: 6px; font-size: 20px; }   /* just left of your score, without moving it */
+  .card > .fire.corner { position: absolute; top: 2px; right: 3px; z-index: 3; font-size: 22px; line-height: 1; }   /* 20+ points today: the card's top-right corner, over the photo's edge */
+  @keyframes fireflick { from { opacity: 1; } to { opacity: .7; } }
+  .mu .bar { height: 4px; border-radius: 2px; background: #3b2030; overflow: hidden; grid-column: 1 / -1; }
+  .mu .bar i { display: block; height: 100%; background: var(--green); }
+  .mu .lg { position: relative; font: italic 800 17px/1 var(--mono); color: var(--text); letter-spacing: .08em; text-align: center; padding: 0 120px; margin: -4px 0 7px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }   /* the league, centred over its scores */
+  .mu .lg .wp { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); font: italic 800 21px/1 var(--mono); letter-spacing: .03em; }
+  .mu .lg .wp.up { color: var(--lime); } .mu .lg .wp.down { color: var(--red); }
+
+  #ticker { position: absolute; left: 60px; right: 60px; bottom: 230px; display: flex; align-items: center; gap: 0; height: 52px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 22px; overflow: hidden; opacity: 0; transform: translateY(12px); transition: .35s; }
+  #ticker.on { opacity: 1; transform: none; }
+  #radar.on ~ #ticker { left: 650px; }
+  #stage:has(#radar.on) #bug { padding-left: 620px; }   /* the score bug moves clear of the open game list */
+  #ticker .lbl { flex: none; height: 100%; display: flex; align-items: center; padding: 0 18px; background: var(--cyan); color: #fff; font: 700 17px/1 var(--mono); letter-spacing: .1em; }
+  #ticker .items { display: flex; gap: 34px; padding: 0 22px; white-space: nowrap; overflow: hidden; font: 500 21px/1 var(--mono); color: var(--muted); }
+  #ticker .items b { color: var(--amber); font-weight: 600; margin-right: 6px; }
+  #ticker .items .now { color: var(--text); }
+  #ticker .items .now b { color: var(--cyan); }
+  /* update available: top left card */
+  #update { position: absolute; left: 60px; top: 40px; max-width: 760px; display: none; flex-direction: column; gap: 10px; padding: 18px 24px;
+    background: var(--panel-2); border: 1px solid var(--line); border-left: 6px solid var(--lime); border-radius: 22px; }
+  #update.on { display: flex; }
+  #update > b { font: 700 28px/1.2 var(--sans); }
+  #update .notes { font: 500 20px/1.4 var(--sans); color: var(--muted); }
+  #update .keys { font: 600 20px/1 var(--mono); color: var(--muted); }
+  #update .keys b { color: #04222a; background: var(--lime); padding: 3px 8px; border-radius: 9px; }
+  /* rewound: how far behind live, top centre */
+  #rewind { position: absolute; left: 50%; top: 40px; transform: translateX(-50%); display: none; align-items: stretch; gap: 0;
+    background: var(--panel-2); border: 1px solid var(--line); border-radius: 22px; overflow: hidden; font: 700 26px/1 var(--mono); }
+  #rewind.on { display: flex; }
+  #rewind span { display: flex; align-items: center; padding: 14px 22px; }
+  #rewind .behind { color: var(--lime); }
+  #rewind .key { border-left: 1px solid var(--line); color: var(--muted); font-size: 22px; }
+  #rewind .go { color: var(--text); background: rgba(239,68,68,.18); }
+  #rewind .go b { margin-left: 8px; padding: 4px 9px; border-radius: 12px; background: var(--red); color: #fff; animation: livepulse 1.4s ease-in-out infinite; }
+  @keyframes livepulse { 50% { opacity: .55; } }
+  /* split screen: the TV app puts the two pictures at y 270–810, left and right halves; these label them */
+  .splitlbl { position: absolute; top: 206px; height: 52px; display: none; align-items: center; gap: 10px; font: 600 22px/1 var(--mono); }
+  html.split .splitlbl { display: flex; }
+  #splitL { left: 24px; } #splitR { left: 984px; }
+  .splitlbl .tb { padding: 8px 12px; border-radius: 12px; font: 700 22px/1 var(--sans); }
+  .splitlbl .st { padding: 8px 12px; border-radius: 12px; background: var(--panel-2); }
+  .splitlbl .st.rz { background: var(--red); }
+  .splitlbl .pl { color: var(--lime); }
+  .splitlbl .mute { margin-left: auto; font: 700 14px/1 var(--mono); color: var(--muted); border: 1px solid var(--line); padding: 4px 6px; border-radius: 9px; }
+  html.split #callouts { display: none; }
+  /* points popups: one compact line each, stacked just above your matchup scores (bottom right) */
+  #pops { position: absolute; right: 60px; bottom: 230px; display: flex; flex-direction: column-reverse; gap: 8px; align-items: flex-end; transition: bottom .35s; }
+  #ticker.on ~ #pops { bottom: 298px; }   /* above the "You're watching" strip while it's up */
+  .pop { display: flex; align-items: center; gap: 11px; padding: 8px 16px 8px 11px; background: var(--panel-2); border: 1px solid var(--line);
+    border-left: 5px solid var(--team); border-radius: 18px; transform: translateX(110%); opacity: 0; transition: transform .4s cubic-bezier(.2,.9,.3,1.15), opacity .3s;
+    max-width: 690px; white-space: nowrap; }
+  .pop.on { transform: none; opacity: 1; }
+  .pop .pts { font: 700 26px/1 var(--mono); color: var(--lime); }
+  .pop .who { font: 700 22px/1.05 var(--sans); color: #fff; overflow: hidden; text-overflow: ellipsis; }
+  .pop .who em { font: 600 20px/1 var(--mono); color: #dfe6f2; font-style: normal; margin-left: 4px; }   /* "4-yd catch": readable on smaller TVs */
+  .pop .ok { font: 700 14px/1 var(--mono); color: #fff; background: var(--cyan); padding: 5px 7px; border-radius: 9px; letter-spacing: .06em; }
+  #toast { position: absolute; right: 60px; top: 50px; background: var(--panel); border: 1px solid var(--line); border-left: 4px solid var(--cyan);
+    padding: 16px 22px; font: 600 24px/1.2 var(--sans); border-radius: 12px; opacity: 0; transition: opacity .3s; max-width: 700px; }
+  #toast.on { opacity: 1; }
+
+  #idle { position: absolute; inset: 0; display: none; flex-direction: column; align-items: center; justify-content: center; gap: 34px;
+    background: radial-gradient(circle at 50% 30%, #0b2f5e, #01142e 75%); }
+  #idle.on { display: flex; }
+  #idle .wm { height: 110px; }
+  #idle h2 { margin: 0; font: 700 56px/1 var(--sans); }
+  #idle .games { display: flex; flex-direction: column; gap: 12px; width: 1300px; }
+  #idle .ig { display: grid; grid-template-columns: 110px 30px 110px 330px 1fr; align-items: center; gap: 14px; padding: 14px 22px;
+    border: 1px solid var(--line); border-radius: 22px; background: var(--panel); font: 600 24px/1 var(--mono); }
+  #idle .tb { padding: 10px 0; border-radius: 12px; text-align: center; font: 700 26px/1 var(--sans); }
+  #idle .when { color: var(--amber); }
+  #idle .who { color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #idle .pairrow { display: flex; align-items: center; gap: 24px; padding: 16px 24px; border: 1px solid var(--line); border-radius: 22px; background: var(--panel); }
+  #idle .pairrow .qr { background: #fff; padding: 6px; border-radius: 12px; }
+  #idle .pairrow .qr img, #idle .pairrow .qr canvas { width: 120px !important; height: 120px !important; display: block; }
+  #idle .pairrow div:last-child { display: flex; flex-direction: column; gap: 10px; font: 500 20px/1.2 var(--mono); color: var(--muted); }
+  #idle .pairrow b { font: 700 28px/1 var(--sans); color: var(--text); }
+  #idle .pairrow span { color: var(--cyan); }
+  #idle .hint { font: 500 20px/1 var(--mono); color: var(--dim); }
+  #setup { position: absolute; inset: 0; display: none; flex-direction: column; align-items: center; justify-content: center; gap: 50px;
+    background: radial-gradient(circle at 50% 30%, #13254a, var(--bg) 75%); }
+  #setup.on { display: flex; }
+  #setup .wm { height: 150px; }
+  #setup .box { display: flex; gap: 60px; align-items: center; padding: 44px 54px; border: 1px solid var(--line); border-radius: 18px; background: var(--panel); }
+  #setup .qr { background: #fff; padding: 14px; border-radius: 12px; }
+  #setup .qr img, #setup .qr canvas { width: 260px !important; height: 260px !important; display: block; }
+  #setup h2 { margin: 0 0 22px; font: 700 42px/1.1 var(--sans); }
+  #setup ol { margin: 0; padding-left: 34px; font: 500 27px/1.5 var(--sans); color: var(--text); max-width: 900px; }
+  #setup ol b { color: var(--cyan); }
+  #allowUpd { display: none; margin-top: 24px; padding: 16px 20px; border-left: 6px solid var(--lime); background: rgba(255,255,255,.05); border-radius: 22px;
+    font: 500 25px/1.45 var(--sans); max-width: 900px; }
+  #allowUpd.on { display: block; }
+  #allowUpd.done { border-left-color: var(--cyan); color: var(--muted); }
+  #allowUpd .k { font: 700 22px/1 var(--mono); color: #04222a; background: var(--lime); padding: 3px 9px; border-radius: 9px; }
+  #setup small { display: block; margin-top: 20px; font: 500 20px/1.4 var(--mono); color: var(--muted); }
+  #splash { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 26px;
+    background: radial-gradient(circle at 50% 40%, #0b2f5e, #01142e 70%); }
+  #splash .wm { height: 200px; }
+  #splash h1 { margin: 0; font: 700 64px/1 var(--sans); }
+  #splash p { margin: 0; font: 500 26px/1.4 var(--mono); color: var(--muted); text-align: center; max-width: 1200px; }
+  #splash.gone { display: none; }
+  /* ---- FantasyTV look: broadcast style from the logo. Slanted shapes, italic heavy numbers, red for you. ---- */
+  #bug .s, .card .p b, .mu .ln .s, .pop .pts, #countdown .secs, .rg .top .sc, #rewind b { font-style: italic; font-weight: 800; }
+  #bug .s { font-size: 40px; }
+  /* The clock: a slanted red broadcast panel, the quarter small and spaced over a big italic time */
+  #bug .c.clk { padding: 0; gap: 0; border-left: 0; align-items: stretch; color: #fff; background: none; }   /* same panel as the rest: no edges beside the caps */
+  #bug .c.clk + .c { border-left: 0; }
+  /* Buttons: the quarter and the down & distance are solid slanted buttons set into the bar (inside its height, both
+     sides slanted). No gloss: a quiet top-to-bottom shade, a darker lip along the bottom edge so it reads as a button,
+     and a soft shadow under it. Drawn behind the text (::before, slanted), so the text stays straight; --f1 (top),
+     --f2 (bottom) and --lip set the colour. */
+  #bug .c.cap { position: relative; z-index: 1; background: none; border-left: 0; color: #fff; font-style: italic; font-weight: 800;
+    text-shadow: 0 2px 3px rgba(0,0,0,.35); --f1: #e8213a; --f2: #c0101f; --lip: #7c0814; }
+  #bug .c.cap::before { content: ''; position: absolute; z-index: -1; left: 6px; right: 6px; top: 7px; bottom: 6px; pointer-events: none;
+    transform: skewX(-10deg); border-radius: 9px; background: linear-gradient(180deg, var(--f1), var(--f2));
+    box-shadow: inset 0 -4px 0 var(--lip), 0 3px 8px rgba(0,0,0,.45); }
+  #bug .c.cap.blue { --f1: #2f6bd0; --f2: #1c4ea6; --lip: #0d2d66; }
+  #bug .c.cap.gold { --f1: #fcc52e; --f2: #e9a70f; --lip: #8a5d00; color: #2a1c00; text-shadow: none; }
+  /* the quarter */
+  #bug .c.clk .q { display: flex; align-items: center; padding: 0 30px 0 20px; margin-right: 8px; font: italic 800 22px/1 var(--mono); letter-spacing: .06em; }
+  /* the down & distance */
+  #bug .c.dd { padding: 0 30px 0 22px; margin: 0 4px; }
+  /* the time: big and white beside it */
+  #bug .c.clk .tm { display: flex; align-items: center; padding: 0 22px 0 6px; font: italic 800 34px/1 var(--mono); letter-spacing: .01em;
+    text-shadow: 0 2px 4px rgba(0,0,0,.5); }
+  #bug .c.clk .tm.sm { font-size: 22px; padding-left: 20px; }
+  #bug .in { height: 72px; padding-bottom: 9px; box-sizing: border-box; }   /* the drive tracker runs under everything */
+  /* red zone: the down & distance keycap turns red (the cap styles above) */
+  .card .p b { font-size: 44px; }
+  #atTag { transform: skewX(-12deg); border-radius: 9px; background: var(--cyan); border-color: var(--cyan); color: #fff; font-style: italic; font-weight: 700; }
+  #atTag b { color: #fff; }
+  #atTag .k { border-color: rgba(255,255,255,.5); color: #fff; }
+  #atTag.off { background: var(--panel); border-color: var(--amber); color: var(--muted); }
+  #atTag.off b { color: var(--amber); }
+  .pop { transform: translateX(110%) skewX(-8deg); border-radius: 12px; }   /* slides in, slanted */
+  .pop.on { transform: skewX(-8deg); }
+  .pop .pts { color: #fff; font-size: 32px; }
+  #ticker .lbl { font-style: italic; font-weight: 800; }
+  #idle h2, #setup h2, #splash h1 { font-family: var(--mono); font-style: italic; font-weight: 800; letter-spacing: .01em; }
+  #radar header { font-style: italic; }
+  .card.lead { box-shadow: inset 6px 0 0 var(--cyan); }
+  /* ---- Alerts, badges, touchdown flash, final card ---- */
+  .mu .lg .wp.clinch { color: #04210f; background: var(--lime); padding: 3px 9px; border-radius: 6px; font-size: 18px; }
+  .mu .lg .wp.miracle { color: #fff; background: var(--red); padding: 3px 9px; border-radius: 6px; font-size: 18px; }
+  .pop.alert .pts { font-size: 22px; }
+  .pop.alert.up .pts { color: var(--lime); } .pop.alert.down .pts { color: var(--red); }
+  .pop.alert.up { --team: var(--lime) !important; } .pop.alert.down { --team: var(--red) !important; }
+  .pop.alert.danger { --team: var(--red) !important; background: #2a0d18; }
+  .pop.alert.danger .pts { color: var(--red); }
+  /* injuries: a white popup with a red medical cross, unlike anything else that pops up */
+  .pop.alert.injury { --team: #e11d2e !important; background: #fff; border-color: #fff; box-shadow: 0 6px 22px rgba(0,0,0,.5); }
+  .pop.alert.injury .pts { display: flex; align-items: center; gap: 10px; color: #d0101f; }
+  .pop.alert.injury .pts::before { content: "\271A"; display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 8px;
+    background: #e11d2e; color: #fff; font: normal 900 24px/1 var(--sans); }
+  .pop.alert.injury .who { color: #0b1a33; } .pop.alert.injury .who em { color: #44546b; }
+  .pop.alert.injury .ok { background: #0b1a33; }
+  /* the bar's touchdown flash: the glow is drawn once and only faded (a moving blurred shadow redraws every frame) */
+  #rail { position: relative; }
+  #rail::before { content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; z-index: 0; opacity: 0;
+    box-shadow: inset 0 0 0 4px var(--flash), inset 0 0 120px var(--flash); }
+  #rail.td::before { animation: tdflash 1.8s ease-out; }
+  @keyframes tdflash { 0%, 30% { opacity: 1; } 100% { opacity: 0; } }
+  #final { position: absolute; left: 50%; top: 60px; transform: translateX(-50%) skewX(-6deg); min-width: 760px; display: none; flex-direction: column;    background: var(--panel); border: 1px solid var(--line); border-top: 6px solid var(--cyan); border-radius: 18px; padding: 14px 26px 18px; }
+  #final.on { display: flex; }
+  #final .hd { display: flex; align-items: center; gap: 16px; font: italic 800 40px/1 var(--mono); padding-bottom: 10px; border-bottom: 1px solid var(--line); margin-bottom: 6px; }
+  #final .hd .tag { font-size: 16px; padding: 6px 10px; background: var(--cyan); color: #fff; border-radius: 5px; font-style: italic; }
+  #final .hd .t { display: flex; align-items: center; gap: 8px; height: 56px; padding: 0 10px; box-shadow: inset 0 -4px 0 var(--team); }
+  #final .hd .t img { height: 54px; } #final .hd .t small { font: 600 15px/1 var(--mono); color: var(--muted); }
+  #final .row { display: grid; grid-template-columns: 260px 1fr 90px; align-items: baseline; gap: 16px; padding: 7px 0; }
+  #final .row .nm { font: 600 26px/1.1 var(--sans); } #final .row .nm small { font: 700 15px/1 var(--mono); color: var(--cyan); margin-left: 6px; }
+  #final .row .ln { font: 500 20px/1.2 var(--mono); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #final .row b { font: italic 800 34px/1 var(--mono); text-align: right; }
+  /* ---- Broadcast motion: switch stinger, rolling numbers, score flip, drive tracker, live pulse, sliding bars ---- */
+  #stinger { position: absolute; inset: 0; pointer-events: none; overflow: hidden; display: none; z-index: 40; }
+  #stinger.on { display: block; }
+  #stinger i { position: absolute; top: -10%; bottom: -10%; left: -20%; width: 140%; transform: skewX(-18deg) translateX(-130%); animation: wipe 2.5s cubic-bezier(.7,0,.2,1) forwards; }
+  #stinger .s1 { background: var(--cyan); }
+  #stinger .s2 { background: #fff; animation-delay: .06s; width: 136%; }
+  #stinger .s3 { background: var(--panel); animation-delay: .12s; width: 132%; }
+  @keyframes wipe { 0% { transform: skewX(-18deg) translateX(-130%); } 26%, 72% { transform: skewX(-18deg) translateX(0); } 100% { transform: skewX(-18deg) translateX(130%); } }
+  #stinger .in { position: absolute; inset: 0; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; align-content: center; gap: 10px 34px;
+    opacity: 0; animation: stingtext 2.5s ease forwards; }
+  #stinger .in img { height: 170px; }
+  #stinger .in b { font: italic 800 130px/1 var(--mono); color: #fff; }
+  #stinger .in span { font: italic 700 60px/1 var(--mono); color: var(--muted); }
+  #stinger .in em { flex-basis: 100%; text-align: center; font: italic 700 40px/1.2 var(--mono); color: var(--amber); letter-spacing: .02em; }
+  @keyframes stingtext { 0%, 24% { opacity: 0; transform: translateX(-60px); } 34%, 66% { opacity: 1; transform: none; } 76%, 100% { opacity: 0; transform: translateX(60px); } }
+  .card .p b, .mu .ln .s { position: relative; }
+  .gain { position: absolute; left: 100%; top: -6px; margin-left: 10px; font: italic 800 26px/1 var(--mono); color: var(--lime); white-space: nowrap;
+    animation: gain 2s ease-out forwards; pointer-events: none; }
+  @keyframes gain { 0% { opacity: 0; transform: translateY(14px); } 15% { opacity: 1; transform: none; } 70% { opacity: 1; } 100% { opacity: 0; transform: translateY(-36px); } }
+  #bug .s.flip { animation: flip 1.6s ease-out; }
+  @keyframes flip { 0% { transform: rotateX(90deg); background: var(--team); } 25% { transform: none; background: var(--team); } 100% { background: transparent; } }
+  #bug .in { position: relative; }
+  .drive { position: absolute; left: 0; right: 0; bottom: 0; height: 9px; background: #0b2f5e; z-index: 2; }   /* along the bottom of the score bug */
+  .drive i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--team); z-index: 0; }
+  .drive b { position: absolute; z-index: 2; top: 1px; width: 18px; height: 7px; margin-left: -9px; box-sizing: border-box; border-radius: 50%; background: #c8773a; border: 1px solid #fff; transition: left 1.2s cubic-bezier(.2,.8,.2,1); }
+  .drive.rz i { box-shadow: 0 0 14px var(--red); }
+  .drive::before { content: ''; position: absolute; right: 0; top: 0; bottom: 0; width: 20%; z-index: 1; background: rgba(255,77,87,.32); pointer-events: none; }   /* the red zone, the last 20 yards: drawn over the drive bar so it never changes length or colour (the ball stays on top) */
+  #bug .in.rzbeat::after { content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; z-index: 3;
+    box-shadow: inset 0 0 0 3px rgba(255,77,87,.9), inset 0 0 26px rgba(255,77,87,.55); animation: fadepulse 2.5s ease-in-out infinite alternate; }   /* slow and gentle, a fade the TV does for free */
+  /* (no endless colour shimmer on "On field": it made the TV repaint every frame) */
+  .mu .bar i.moving { box-shadow: 0 0 12px currentColor; filter: brightness(1.4); }
+  /* ---- Headshots, timeouts, first down, possession football, crunch time, win trend ---- */
+  .card { position: relative; }
+  .card { overflow: hidden; }
+  .card > :not(.hs) { position: relative; z-index: 1; }   /* text over the photo */
+  .card .hs { position: absolute; right: -46px; bottom: 0; height: 146px; width: auto; pointer-events: none;   /* ESPN cut-out: stands on the card */
+    -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 30%); mask-image: linear-gradient(90deg, transparent 0, #000 30%); }
+  .card .nm { padding-right: 96px; }
+  /* a dark fade over the bottom of the photo, so a stat line running across it reads cleanly */
+  .card::after { content: ''; position: absolute; right: 0; bottom: 0; width: 62%; height: 58%; pointer-events: none;
+    background: linear-gradient(0deg, rgba(2,24,56,.96) 0%, rgba(2,24,56,.75) 38%, rgba(2,24,56,0) 100%); }
+  .card.hit::after, .card.td::after { opacity: .85; }
+  .card .ln { overflow: visible; text-overflow: clip; color: #dfe7f3; text-shadow: 0 1px 2px #000, 0 0 6px rgba(0,0,0,.95), 0 0 14px rgba(1,20,46,.9); }   /* the whole line, readable over the photo */
+  #bug .t .tr { display: flex; flex-direction: column; align-items: flex-start; gap: 5px; }
+  #bug .t.home, #final .t.home { flex-direction: row-reverse; padding: 0 12px 0 16px; }   /* home: record, then logo, mirroring the away side */
+  #bug .t.home .tr { align-items: flex-end; }
+  #bug .t .tos { display: flex; gap: 4px; }
+  #bug .t .tos i { width: 9px; height: 4px; border-radius: 2px; background: rgba(255,255,255,.18); }
+  #bug .t .tos i.on { background: #fff; }
+  #bug .c.fd { animation: fd 1.5s ease-out; }   /* gold keycap (above), popping in */
+  @keyframes fd { 0% { transform: scale(1.25); } 15% { transform: none; } 80% { opacity: 1; } 100% { opacity: .9; } }
+  #bug .s.poss::after { content: ''; width: 18px; height: 11px; margin-left: 10px; border: 0; border-radius: 50%;
+    background: linear-gradient(90deg, transparent 44%, #fff 44% 56%, transparent 56%), #c8773a; box-shadow: 0 0 0 1px rgba(255,255,255,.5); }
+  #bug .s.poss.newposs::after { animation: possin .9s cubic-bezier(.2,.9,.3,1.3); animation-delay: var(--pd, 0s); }
+  @keyframes possin { 0% { transform: translateX(-40px) scale(.2) rotate(-180deg); opacity: 0; } 100% { transform: none; opacity: 1; } }
+  #bug .c.crunch .q { animation: crunchq 1.4s ease-in-out infinite alternate; }
+  @keyframes crunchq { from { opacity: 1; } to { opacity: .55; } }
+  @keyframes fadepulse { from { opacity: 0; } to { opacity: 1; } }
+  .mu .pg > div { position: relative; }
+  .mu .pg > div > * { position: relative; }   /* text above the close-game glow */
+  /* Every card spot taken: the cards share the bar evenly (the lead a little wider), no gap before the matchups */
+  #rail.full .cards { flex: 1 1 auto; min-width: 0; }
+  #rail.full .card { flex: 1 1 0; width: auto; min-width: 0; }
+  #rail.full .card.lead { flex-grow: 1.15; }
+  #rail.full .fill { display: none; }
+  /* A player's play reaching the screen: his card glows in his team colour and the gain floats off his points */
+  /* A card's glow: a layer drawn once behind the photo and text, then only its opacity animates (cheap on any box) */
+  .card > .fx { position: absolute; inset: 0; z-index: 0; pointer-events: none; opacity: 0; will-change: opacity;
+    box-shadow: inset 0 0 0 3px var(--hit), inset 0 -140px 120px -60px var(--hit); animation: cardhit 10s ease-out forwards; }
+  @keyframes cardhit { 0%, 100% { opacity: 0; } 4%, 20%, 36%, 52%, 68%, 84% { opacity: 1; } 12%, 28%, 44%, 60%, 76%, 92% { opacity: .55; } }   /* glows for 10 s, pulsing */
+  .card.hit .p small { visibility: hidden; }   /* the gain takes the projection's place while the card glows */
+  .gain.big { font-size: 34px; top: 2px; text-shadow: 0 2px 10px rgba(0,0,0,.6); animation: gainbig 10s ease-out forwards; }
+  @keyframes gainbig { 0% { opacity: 0; transform: translateX(-12px) scale(.6); } 4% { opacity: 1; transform: scale(1.15); } 8%, 88% { opacity: 1; transform: none; } 100% { opacity: 0; transform: translateY(-14px); } }
+  /* Your player's touchdown: a banner across the screen in his team's colours */
+  #tdBanner { position: absolute; left: 60px; width: 432px; bottom: 236px; height: 102px; pointer-events: none; display: none; z-index: 30; overflow: hidden; border-radius: 12px; }   /* above the AutoTune tag, left of centre; 40% smaller than it was */
+  #tdBanner.on { display: block; }
+  #tdBanner i { position: absolute; left: -6%; right: -6%; transform: skewY(-4deg) translateX(-120%); animation: tdband 4.6s cubic-bezier(.7,0,.2,1) forwards; }
+  #tdBanner .s1 { top: 8px; height: 86px; background: var(--team); }
+  #tdBanner .s2 { top: 5px; height: 92px; background: var(--team2); animation-delay: .05s; z-index: -1; }
+  @keyframes tdband { 0% { transform: skewY(-4deg) translateX(-120%); } 14%, 86% { transform: skewY(-4deg) translateX(0); } 100% { transform: skewY(-4deg) translateX(120%); } }
+  #tdBanner .in { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 11px; justify-content: flex-start; padding-left: 8px; animation: tdtext 4.6s ease forwards; opacity: 0; }
+  #tdBanner .in img { height: 104px; margin: 0 -6px -4px -12px; align-self: flex-end; filter: drop-shadow(0 4px 8px rgba(0,0,0,.5)); }
+  #tdBanner .tx { display: flex; flex-direction: column; gap: 4px; }
+  #tdBanner .tx b { font: italic 800 50px/.9 var(--mono); color: #fff; letter-spacing: .02em; text-shadow: 0 4px 0 rgba(0,0,0,.25), 0 0 24px rgba(0,0,0,.35); }
+  #tdBanner .tx span { font: italic 800 20px/1 var(--mono); color: #fff; text-shadow: 0 3px 0 rgba(0,0,0,.3); }
+  #tdBanner .tx em { font-style: italic; color: var(--lime); margin-left: 6px; }
+  @keyframes tdtext { 0%, 12% { opacity: 0; transform: scale(1.6); } 20% { opacity: 1; transform: scale(.96); } 26%, 82% { opacity: 1; transform: none; } 92%, 100% { opacity: 0; transform: translateX(80px); } }
+  /* Your player's touchdown on his card: flashing in his team colour for the full 10 s, with a TOUCHDOWN badge */
+  /* two layers trade places once a second: his team colour with a white edge, then a team-colour edge and glow */
+  .card.td > .fx { background: var(--hit); box-shadow: inset 0 0 0 4px #fff; animation: tdcard 10s linear forwards; }
+  .card.td > .fx.b { background: none; box-shadow: inset 0 0 0 4px var(--hit), inset 0 -150px 120px -50px var(--hit); animation-name: tdcard2; }
+  @keyframes tdcard { 0%, 10%, 20%, 30%, 40%, 50%, 60%, 70%, 80%, 90% { opacity: 1; } 5%, 15%, 25%, 35%, 45%, 55%, 65%, 75%, 85%, 95%, 100% { opacity: 0; } }
+  @keyframes tdcard2 { 0%, 10%, 20%, 30%, 40%, 50%, 60%, 70%, 80%, 90%, 100% { opacity: 0; } 5%, 15%, 25%, 35%, 45%, 55%, 65%, 75%, 85%, 95% { opacity: 1; } }
+  .card .tdtag { display: inline-block; padding: 3px 9px; border-radius: 6px; background: var(--amber); color: #2a1c00; font: italic 800 18px/1 var(--mono); letter-spacing: .06em; }
+  .card.td .p b .roll, .card.td .nm { text-shadow: 0 2px 8px rgba(0,0,0,.7); }
+  /* A touchdown or big play: his photo pops out of his card, three times the size, over everything */
+  #bigShot { position: absolute; display: none; z-index: 42; pointer-events: none; transform-origin: 0 0; will-change: transform; }   /* one moving layer: smooth on the TV */
+  #bigShot.on { display: block; }
+  #bigShot img { position: absolute; left: 0; bottom: 0; width: 100%; height: 100%; object-fit: contain; object-position: bottom;
+    -webkit-mask-image: linear-gradient(to top, transparent 0, #000 30%); mask-image: linear-gradient(to top, transparent 0, #000 30%); }
+    /* no live shadow: redrawing it every frame made the TV stutter; the bottom fade is painted once with the layer, so it costs nothing while it moves */
+  #bigShot .glow { position: absolute; left: 6%; right: 6%; bottom: 0; height: 70%; border-radius: 50% 50% 0 0;
+    background: radial-gradient(ellipse at 50% 100%, var(--team) 0%, transparent 70%); opacity: .9; }
+  #bigShot .lbl { position: absolute; left: 63%; bottom: 46%; display: flex; flex-direction: column; gap: 8px; white-space: nowrap;
+    animation: bigtext 4.6s ease forwards; opacity: 0; }
+  #bigShot.left .lbl { left: auto; right: 92%; align-items: flex-end; }
+  #bigShot .lbl b { font: italic 800 80px/.9 var(--mono); color: #fff; padding: 6px 26px 10px; background: var(--team); transform: skewX(-10deg);
+    box-shadow: 0 8px 24px rgba(0,0,0,.45); text-shadow: 0 4px 0 rgba(0,0,0,.25); }
+  #bigShot .lbl span { font: italic 800 34px/1 var(--mono); color: #fff; text-shadow: 0 3px 10px rgba(0,0,0,.8); padding-left: 10px; }
+  #bigShot .lbl em { font-style: italic; color: var(--lime); margin-left: 10px; }
+  @keyframes bigtext { 0%, 14% { opacity: 0; transform: translateX(-30px); } 22%, 76% { opacity: 1; transform: none; } 84%, 100% { opacity: 0; } }
+  /* the one popup OK acts on: outlined */
+  .pop.target { box-shadow: 0 0 0 3px #fff, 0 6px 18px rgba(0,0,0,.5); }
+  .pop:not(.target) .ok { display: none; }   /* only the outlined popup shows OK: Up/Down moves the outline */
+  /* ---- First-launch remote tour: the screen dims, the part being explained is outlined, a card says what the key does ---- */
+  #tour { position: absolute; inset: 0; z-index: 60; display: none; pointer-events: none; }
+  #tour.on { display: block; }
+  #tour.nospot { background: rgba(0,8,24,.72); }
+  #tour .spot { position: absolute; display: none; border: 3px solid var(--cyan); border-radius: 20px; box-shadow: 0 0 0 4000px rgba(0,8,24,.72), 0 0 30px var(--cyan);
+    transition: left .35s, top .35s, width .35s, height .35s; }
+  #tour.spotted .spot { display: block; }
+  #tour .tcard { position: absolute; left: 50%; top: 200px; transform: translateX(-50%); width: 760px; padding: 30px 36px 26px; background: var(--panel);
+    border: 1px solid var(--line); border-left: 6px solid var(--cyan); border-radius: 22px; box-shadow: 0 20px 60px rgba(0,0,0,.6); }
+  #tour .tcard.right { left: 1290px; }
+  #tour .top { display: flex; align-items: center; gap: 16px; margin-bottom: 16px; }
+  #tour .key { display: inline-flex; align-items: center; justify-content: center; min-width: 74px; height: 64px; padding: 0 16px; border-radius: 14px;
+    background: var(--cyan); color: #fff; font: italic 800 34px/1 var(--mono); }
+  #tour .key:empty { display: none; }
+  #tour .n { margin-left: auto; font: 700 22px/1 var(--mono); color: var(--muted); letter-spacing: .08em; }
+  #tour h3 { margin: 0 0 12px; font: italic 800 44px/1.05 var(--mono); color: #fff; }
+  #tour p { margin: 0; font: 500 28px/1.35 var(--sans); color: #dfe6f2; }
+  #tour .nav { display: flex; gap: 34px; margin-top: 24px; font: 700 24px/1 var(--mono); color: #b9c6da; }
+  #tour .nav b { color: var(--cyan); margin-right: 8px; }
+  #tour .tqr { display: flex; align-items: center; gap: 24px; margin-top: 22px; font: 600 24px/1.3 var(--mono); color: #dfe6f2; }
+  #tour .tqr img { width: 220px; height: 220px; padding: 8px; background: #fff; border-radius: 14px; flex: none; }
+  /* while the tour is up, only its sample popups show */
+  #stage:has(#tour.on) #pops .pop:not(.demo) { visibility: hidden; }

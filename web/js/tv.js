@@ -27,7 +27,7 @@ function applySettings() {
   prefs.favTeams = teamList(settings.favTeams);
   prefs.blackout = teamList(settings.blackout);
   prefs.oppWeight = +settings.oppWeight || 0;
-  prefs.showOpp = settings.showOpp !== false;
+  prefs.showOpp = settings.showOpp === true;   // off unless turned on (Custom)
   prefs.opponents = roster ? roster.opponents : null;
   prefs.out ||= {};
 }
@@ -203,11 +203,13 @@ function spotBigPlays(prev, next) {
       for (const p of mine) {
         if (p.team !== g.home.abbr && p.team !== g.away.abbr) continue;
         const got = playPoints(p, text, g.sit.lastPlay.type);
-        if (!got || got.pts <= 0) continue;   // any play that gains you something
+        if (!got || got.pts <= 0 || got.pts < popupMin()) continue;   // any play that gains you something (or the Settings minimum)
         const watching = g.id === auto.current || (split && split.game === g.id);
-        // You saw the play: no popup for it (and none from Sleeper's catch-up either).
-        if (watching && settings.popupTiming === 'skipWatching') { popupFor[p.id] = Date.now(); continue; }
-        popups.push({ showAt: next.t + popupWait(g, watching), game: g.id, who: p, pts: got.pts, what: got.what, espnAt: next.t,
+        // A touchdown elsewhere waits until it airs on its own channel too: AutoTune may jump there first (then it's
+        // the game on screen and gets its moment as it happens), and if not, the popup doesn't spoil it.
+        const td = /touchdown/i.test(got.what);
+        const wait = td ? Math.max(popupWait(g, watching), ((sim ? settings.delay : delayFor(g.id)) + 2) * 1000) : popupWait(g, watching);
+        popups.push({ showAt: next.t + wait, game: g.id, who: p, pts: got.pts, what: got.what, espnAt: next.t,
           td: /touchdown/i.test(got.what), team: p.team === g.home.abbr ? g.home : g.away, teams: p.leagues.filter(l => l.starter).length });
         popupFor[p.id] = Date.now();
         playStats.mine++;
@@ -293,13 +295,24 @@ async function refreshMatchups() {
     const last = matchupHistory[matchupHistory.length - 1];
     popupsFromMatchups(last && last.list, list);
     matchupHistory.push({ t: Date.now(), list });
-    while (matchupHistory.length > 2) matchupHistory.shift();
+    while (matchupHistory.length > 2 && matchupHistory[1].t < Date.now() - 400e3) matchupHistory.shift();
   } catch { /* next time */ }
 }
-/** Live: the newest reading (you'd rather see the score now than wait for the stream), with each win chance. */
+/**
+ * Fantasy points run ahead of your stream (they move the moment a play happens): the TV shows the reading from your
+ * stream's delay ago, so a score never changes before you've seen the play. The newest reading when there's no older.
+ */
+const behindMs = () => (auto.current ? delayFor(auto.current) : settings.delay) * 1000;
+function delayed(history) {
+  const at = Date.now() - behindMs();
+  let best = history[0];
+  for (const h of history) if (h.t <= at) best = h;
+  return best;
+}
+/** Live: your matchups as of your stream, with each win chance. */
 function matchupsNow() {
   if (sim) return simMatchups();
-  const last = matchupHistory[matchupHistory.length - 1];
+  const last = delayed(matchupHistory);
   if (!last) return [];
   const live = (snapshots[snapshots.length - 1] || {}).games || [];
   // A team defense's id is the team itself ("BUF").
@@ -326,14 +339,23 @@ function simMatchups() {
 }
 
 async function refreshPoints() {
-  try { pointsNow = await loadPoints(roster.season, week); } catch { /* keep last */ }
+  try {
+    pointsNow = await loadPoints(roster.season, week);
+    pointsHistory.push({ t: Date.now(), pts: pointsNow });
+    while (pointsHistory.length > 2 && pointsHistory[1].t < Date.now() - 400e3) pointsHistory.shift();
+  } catch { /* keep last */ }
 }
+const pointsHistory = [];   // {t, pts}: the player cards show the reading from your stream's delay ago
+const pointsShown = () => (delayed(pointsHistory) || {}).pts || pointsNow;
 
 /**
  * Points popups, straight from your matchups (the numbers your Sleeper app shows, by each league's scoring): every
  * starter whose points went up since the last check (15 s), once even when they start for both your teams. Right
  * away, no waiting for the stream.
  */
+/** Points popups only for plays worth at least this much (Settings: 0 = every play, 5 = big plays, 6 = touchdowns). */
+const popupMin = () => Math.max(0, +settings.popupMin || 0);
+
 function popupsFromMatchups(before, after) {
   if (!before || settings.pointsPopups === false) return;
   const gains = {};
@@ -349,7 +371,7 @@ function popupsFromMatchups(before, after) {
   }
   for (const [id, { gain }] of Object.entries(gains)) {
     const p = roster.players[id];
-    if (!p || (prefs.out || {})[id]) continue;
+    if (!p || (prefs.out || {})[id] || gain < popupMin()) continue;
     if (Date.now() - (popupFor[id] || 0) < 120e3) continue;   // ESPN's play already popped this one, on time
     popupFor[id] = Date.now();
     const g = ranked.find(x => x.home.abbr === p.team || x.away.abbr === p.team);
@@ -359,7 +381,7 @@ function popupsFromMatchups(before, after) {
     // watching, wait the channel's delay: Sleeper only hears of a play after it happens, so by then it's on your screen.
     const watching = g && (g.id === auto.current || (split && split.game === g.id));
     const wait = watching ? ((sim ? settings.delay : delayFor(g.id)) + 2) * 1000 : 0;
-    popups.push({ showAt: Date.now() + wait, game: g && g.id, who: p, pts: Math.round(gain * 10) / 10, what: line ? `on the day: ${line}` : 'just scored', team,
+    popups.push({ showAt: Date.now() + wait, heard: Date.now(), game: g && g.id, who: p, pts: Math.round(gain * 10) / 10, what: line ? `on the day: ${line}` : 'just scored', team,
       teams: p.leagues.filter(l => l.starter).length });
     playStats.queued++;
   }
@@ -520,7 +542,7 @@ function currentGames() {
 // ---- main loop
 function loop() {
   const games = currentGames();
-  const pointsSrc = sim ? sim.points() : pointsNow;
+  const pointsSrc = sim ? sim.points() : pointsShown();
   applySettings();
   ranked = rankAll(games, roster.players, pointsSrc, prefs);
   // What ESPN can't say: the channel on screen went to a commercial (its score bug is gone).
@@ -575,7 +597,7 @@ async function tune(id, why) {
     // The first few channel changes also teach the rewind key.
     let tips = 0;
     try { tips = +(localStorage.getItem('ftv.rewindTips') || 0); localStorage.setItem('ftv.rewindTips', tips + 1); } catch { /* fine */ }
-    toast(native && tips < 5 ? `Tuned ${ch.name} · ◀ rewinds 10 s, ▶ goes live` : `Tuned ${ch.name}`);
+    toast(native && tips < 5 ? `Tuned ${ch.name} · ◀ rewinds this game 10 s, ▶ goes live` : `Tuned ${ch.name}`);
     playStream(ch.url);
   } catch (e) {
     toast(`IPTV: ${e.message}`);
@@ -640,17 +662,19 @@ function unsplit() {
 // How far behind live the picture plays after a rewind; the tag says so, and Up (or the phone) goes back to live.
 let behind = 0, rewindAsked = 0;
 /** Rewind seconds more on the main picture (0 = back to live). */
-// Rewind: on unless turned off in Settings, and off by default on a lower-powered TV (it made the picture stutter there).
-const rewindOn = () => settings.rewind ?? !(native && native.lowPower && native.lowPower());
-// Smooth playback (tunneling): video straight from the decoder to the screen. Smooth on slower TVs, but the picture
-// can't be read then (game clock, channel delay, commercials), so it's on by default only on a lower-powered TV; a
-// stronger one (Shield) plays smoothly without it and keeps reading the picture.
-const tunnelOn = () => settings.tunnel ?? !!(native && native.lowPower && native.lowPower());
-// Settings (for development): save the clean score-bug strip every 3 s, to build a reader for each network's digits.
-if (native && native.captureBugs) native.captureBugs(!!settings.captureBugs);
+// Performance (phone Settings): Smooth = tunneled video (decoder straight to the screen) and no rewind buffer, for
+// lower-powered TVs where either made the picture stutter; Full = rewind, and the clock read off the screen itself
+// (a stronger box like the Shield plays smoothly without tunneling). Auto picks Smooth on a lower-powered TV; Custom
+// sets each on its own.
+const weakTv = () => !!(native && native.lowPower && native.lowPower());
+const perf = () => ['smooth', 'full', 'custom'].includes(settings.perf) ? settings.perf : weakTv() ? 'smooth' : 'full';
+const rewindOn = () => perf() === 'custom' ? settings.rewind ?? !weakTv() : perf() === 'full';
+const tunnelOn = () => perf() === 'custom' ? settings.tunnel ?? weakTv() : perf() === 'smooth';
+// Settings (Developer, on unless turned off): save the clean score-bug strip every 3 s, to build a reader for each network's digits.
+if (native && native.captureBugs) native.captureBugs(settings.bugSamples !== false);
 function rewindBy(seconds) {
   if (!native) return;
-  if (!rewindOn()) { if (seconds > 0) toast('Rewind is off on this TV: turn it on in phone Settings'); return; }
+  if (!rewindOn()) { if (seconds > 0) toast('Rewind is off on this TV: choose Performance: Full in phone Settings'); return; }
   rewindAsked = seconds; native.rewind(seconds);
 }
 window.ftvRewound = secs => {
@@ -660,7 +684,7 @@ window.ftvRewound = secs => {
   tag.innerHTML = secs > 0
     ? `<span class="behind">⏪ ${secs}s BEHIND</span><span class="key">◀ 10s back</span><span class="key go">▶ GO <b>LIVE</b></span>`
     : '';
-  if (secs === 0) toast(rewindAsked > 0 ? 'Nothing saved to rewind yet: this channel keeps the last minute as you watch it' : '● Live');
+  if (secs === 0) toast(rewindAsked > 0 ? "Nothing to rewind yet: only the game you're watching can be rewound, from when you tuned in" : '● Live');
 };
 
 // ---- Updates (TV app): a newer release on GitHub shows a card; OK installs it, Back puts it off until next time.
@@ -1032,16 +1056,34 @@ function drawField() {
   $('#field .lines').innerHTML = lines.join('');
 }
 
+// An end zone in the team's colour with its logo (its name until the logo loads, or if it can't). Redrawn only when
+// the team changes, so the logo doesn't flicker.
+function endZone(ez, t) {
+  ez.style.background = t.color;
+  if (ez.dataset.team === t.abbr) return;
+  ez.dataset.team = t.abbr;
+  ez.classList.remove('logo');
+  ez.querySelector('span').textContent = t.abbr;
+  const old = ez.querySelector('img');
+  if (old) old.remove();
+  const src = t.darkLogo || t.logo;
+  if (!src) return;
+  const img = new Image();
+  img.alt = '';
+  img.onload = () => { if (ez.dataset.team === t.abbr) ez.classList.add('logo'); };
+  img.onerror = () => img.remove();
+  img.src = src;
+  ez.prepend(img);
+}
+
 function renderField(g) {
   const f = $('#field');
   renderIdle(g);
   if (!g) { f.classList.remove('break'); return; }
   const off = g.sit && g.sit.poss === g.home.abbr ? g.home : g.away;
   const def = off === g.home ? g.away : g.home;
-  f.querySelector('.ez.l').style.background = off.color;
-  f.querySelector('.ez.l span').textContent = off.abbr;
-  f.querySelector('.ez.r').style.background = def.color;
-  f.querySelector('.ez.r span').textContent = def.abbr;
+  endZone(f.querySelector('.ez.l'), off);
+  endZone(f.querySelector('.ez.r'), def);
   // The offense always drives to the right here.
   const ytg = g.sit && g.sit.ytg != null ? g.sit.ytg : 50;
   const x = 160 + (100 - ytg) * 16;
@@ -1498,18 +1540,33 @@ function hidePop(el) {
 /** Every half second: popups that are due slide in on the right; ones whose time is up slide out. */
 function showPopups() {
   const now = Date.now(), due = popups.filter(p => p.showAt <= now);
-  for (const el of document.querySelectorAll('#pops .pop.on')) if (el.hideAt <= now) hidePop(el);
+  const onScreen = id => id && (id === auto.current || (split && split.game === id));
+  // Up for a game you've since switched to: you're watching it now, so it goes.
+  for (const el of document.querySelectorAll('#pops .pop.on:not(.demo)')) if (el.hideAt <= now || onScreen(el.game)) hidePop(el);
   popups = popups.filter(p => p.showAt > now && now - p.showAt < 120e3);
   for (const p of due) {
+    const watching = onScreen(p.game);
+    // Timed for a game you weren't watching, but AutoTune has since switched to it: hold it until the play reaches
+    // your screen on this channel, so nothing shows before you see it happen.
+    const heard = p.espnAt || p.heard;
+    if (watching && heard) {
+      const airs = heard + ((sim ? settings.delay : delayFor(p.game)) + 2) * 1000;
+      if (now < airs) { p.showAt = airs; popups.push(p); continue; }
+    }
     playStats.shown++;
-    // Your player in the game you're watching, with his card on screen: you saw the play and his card shows the
-    // points, so no popup. His card still lights up, and a touchdown still gets its whole moment.
-    const watching = p.game && (p.game === auto.current || (split && split.game === p.game));
-    if (p.kind !== 'alert' && watching && $(`#rail .card[data-pid="${p.who.id}"]:not(.away)`)) {
-      if (p.td) { flashTd(p.team.color); if (!bigShot(p)) tdBanner(p); }
-      cardHit[p.who.id] = { at: Date.now(), pts: p.pts, color: p.team.color, td: !!p.td };
+    // The game you're watching never gets a popup: you saw the play (or the injury, or the swing it caused).
+    if (p.kind === 'alert' && watching) continue;
+    // Your player in the game you're watching: his card shows the points instead. It lights up, and a touchdown gets
+    // its moment (Settings: full, card glow only, or off).
+    if (watching) {
+      const moment = settings.tdHere || 'full';
+      if (p.td && moment === 'full') { flashTd(p.team.color); if (!bigShot(p)) tdBanner(p); }
+      if (!p.td || moment !== 'off') cardHit[p.who.id] = { at: Date.now(), pts: p.pts, color: p.team.color, td: !!p.td && moment !== 'off' };
       continue;
     }
+    // Your player's touchdown in another game (Settings): a small popup (default), the full banner, or nothing.
+    const away = settings.tdAway || 'small';
+    if (p.kind !== 'alert' && p.td && away === 'off') continue;
     const el = document.createElement('div');
     el.className = 'pop';
     el.style.setProperty('--team', p.team.color);
@@ -1523,16 +1580,16 @@ function showPopups() {
     } else {
       // From the game on screen: OK replays it (the TV app keeps the last minute).
       const canReplay = !elsewhere && native && p.espnAt && p.game === auto.current && !split;
-      el.innerHTML = `<b class="pts">+${pts(p.pts)}</b><span class="who">${esc(p.who.short)}${p.teams > 1 ? ` ×${p.teams}` : ''} <em>· ${esc(p.what)}</em></span>`
+      el.innerHTML = `<b class="pts">${p.td ? "TD +" : "+"}${pts(p.pts)}</b><span class="who">${esc(p.who.short)}${p.teams > 1 ? ` ×${p.teams}` : ''} <em>· ${esc(p.what)}</em></span>`
         + (elsewhere ? '<span class="ok">OK · WATCH</span>' : canReplay ? '<span class="ok">OK · REPLAY</span>' : '');
       if (elsewhere) el.act = { watch: p.game, why: `${p.who.short}, ${p.what}` };
       else if (canReplay) el.act = { espnAt: p.espnAt, game: p.game };
-      // Touchdowns only: his photo pops out of his card (other points get the card glow). A touchdown with no photo
-      // to pop gets the banner instead.
-      if (p.td) { flashTd(p.team.color); if (p.game !== auto.current || !bigShot(p)) tdBanner(p); }   // pop-out photo only for the game on screen
+      // A touchdown from another game: the full banner only when Settings asks for it (it's a play you haven't seen).
+      if (p.td && away === 'full') { flashTd(p.team.color); tdBanner(p); }
       cardHit[p.who.id] = { at: Date.now(), pts: p.pts, color: p.team.color, td: !!p.td };   // his card lights up with the gain
     }
     el.hideAt = now + POP_MS;
+    el.game = p.game;
     $('#pops').prepend(el);   // the stack runs bottom-up: newest at the bottom, nearest your scores
     void el.offsetWidth;      // lay it out off-screen first, so adding .on slides it in (and marks it live at once)
     el.classList.add('on');
@@ -1569,10 +1626,16 @@ function toast(text) {
 async function pairCode() {
   let url = location.origin + '/remote.html';
   try { url = (await (await fetch('/api/info')).json()).remote; } catch { /* use this host */ }
-  for (const el of document.querySelectorAll('.pairUrl, #pairUrl')) el.textContent = url.replace(/^https?:\/\//, '');
+  // The code opens fantasytvapp.com/remote with this TV's home address after the # (kept on the phone, never sent to
+  // the website), which forwards to the remote here and remembers it, so next time the phone just opens the website.
+  // Typed by hand (no camera), the address here still works. A PC test version (localhost) links to itself.
+  const host = (/^http:\/\/((?:10|172|192)\.[\d.]+:\d+)\//.exec(url) || [])[1];
+  const code = host ? `https://fantasytvapp.com/remote#${host}` : url;
+  $('#pairUrl').textContent = host ? 'fantasytvapp.com/remote' : url.replace(/^https?:\/\//, '');
+  for (const el of document.querySelectorAll('.pairUrl')) el.textContent = url.replace(/^https?:\/\//, '');
   if (!window.QRCode) return;
-  for (const el of [$('#qr'), $('#idleQr')]) if (!el.children.length) new QRCode(el, { text: url, width: 120, height: 120, colorDark: '#000', colorLight: '#fff' });
-  if (!$('#setupQr').children.length) new QRCode($('#setupQr'), { text: url, width: 260, height: 260, colorDark: '#000', colorLight: '#fff' });
+  for (const el of [$('#qr'), $('#idleQr')]) if (!el.children.length) new QRCode(el, { text: code, width: 120, height: 120, colorDark: '#000', colorLight: '#fff' });
+  if (!$('#setupQr').children.length) new QRCode($('#setupQr'), { text: code, width: 260, height: 260, colorDark: '#000', colorLight: '#fff' });
 }
 
 // ---- First-launch remote tour: once, the first time your players are on screen (or again from the phone). Each step
@@ -1584,9 +1647,9 @@ const TOUR = [
   { key: '▼', target: '#radar', radar: true, right: true, title: 'Down: every game',
     text: 'All the live games, yours first. Up and Down move, OK watches a game, ▶ hearts it (AutoTune favors hearted games in close calls), Back closes the list. A game you pick stays on for 45 seconds (less if it goes to a commercial), then AutoTune takes over again. To stay on it, turn AutoTune off with Up.' },
   { key: '◀ ▶', target: '#bug .in', title: 'Left: rewind · Right: live',
-    text: 'Left jumps back 10 seconds (again for more, up to a minute). Right goes back to live.' },
+    text: 'Left jumps back 10 seconds in the game you\'re watching (again for more, up to a minute). Right goes back to live. Only the game on screen can be rewound: FantasyTV keeps its last minute from when you tuned in.' },
   { key: 'OK', target: '#pops .demo', demo: 1, title: 'OK on a popup',
-    text: 'When your players score, a popup slides in. OK replays the play, or takes you to that game if it\'s on another channel.' },
+    text: 'When your players score in another game, a popup slides in: OK takes you to that game, live (other games can\'t be rewound). A touchdown in the game you\'re watching gets its moment on screen.' },
   { key: '▲ ▼', target: '#pops .demo', demo: 3, title: 'Several popups? Pick one',
     text: 'With more than one up, Up and Down move the white outline. OK acts on the outlined one.' },
   { target: '#rail', title: 'Your players and matchups',
@@ -1630,7 +1693,7 @@ function showTourStep() {
   if (src) card.querySelector('p').insertAdjacentHTML('afterend', `<div class="tqr"><img src="${src}" alt=""><span>Scan with your phone camera (same Wi-Fi)</span></div>`);
   if (s.radar) { tour.radar = true; radarOpen = true; radarFocus = 0; $('#radar').classList.add('on'); renderRadar(); }
   // Sample popups to point at: the newest outlined, with its OK label.
-  const samples = [['+6.8', 'Your WR', '12-yd catch, TOUCHDOWN', 'OK · REPLAY'], ['+1.4', 'Your RB', '9-yd run'], ['+0.6', 'Your QB', '14-yd pass']];
+  const samples = [['TD +6.8', 'Your WR', '12-yd catch, TOUCHDOWN', 'OK · WATCH'], ['+1.4', 'Your RB', '9-yd run'], ['+0.6', 'Your QB', '14-yd pass']];
   for (let i = (s.demo || 0) - 1; i >= 0; i--) {
     const [p, who, what, ok] = samples[i], el = document.createElement('div');
     el.className = `pop on demo ${i === 0 ? 'target' : ''}`;

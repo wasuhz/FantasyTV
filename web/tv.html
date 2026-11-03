@@ -24,6 +24,8 @@
   #field .ez { position: absolute; top: 0; bottom: 0; width: 160px; display: flex; align-items: center; justify-content: center; }
   #field .ez span { writing-mode: vertical-rl; font: 700 84px/1 var(--sans); letter-spacing: .12em; color: rgba(255,255,255,.85); }
   #field .ez.l { left: 0; } #field .ez.l span { transform: rotate(180deg); }
+  #field .ez img { display: none; width: 136px; height: auto; filter: drop-shadow(0 4px 10px rgba(0,0,0,.4)); }   /* the team's logo, upright */
+  #field .ez.logo img { display: block; } #field .ez.logo span { display: none; }
   #field .ez.r { right: 0; }
   #field .yl { position: absolute; top: 0; bottom: 0; width: 3px; background: rgba(255,255,255,.55); }
   #field .num { position: absolute; font: 700 54px/1 var(--sans); color: rgba(255,255,255,.6); }
@@ -495,7 +497,7 @@
   </div>
   <video id="video" muted autoplay playsinline></video>
   <div id="idle"><img class="wm" src="img/wordmark.png" alt="FantasyTV"><h2></h2><div class="games"></div><div class="pairrow"><div class="qr" id="idleQr"></div><div><b>Your phone is the remote</b><span id="pairUrl"></span><small>Scan with the phone camera (same Wi-Fi)</small></div></div>
-    <div class="hint">AutoTune starts on its own when a drive matters · ↓ All games · ◀ rewind · ▶ live</div></div>
+    <div class="hint">AutoTune starts on its own when a drive matters · ↓ All games · ◀ rewind this game · ▶ live</div></div>
 
   <div id="callouts"></div>
 
@@ -544,9 +546,9 @@
       <div class="steps">
         <h2>Welcome! Set it up from your phone</h2>
         <ol>
-          <li>Scan this code with your phone's camera (same Wi-Fi as the TV), or open <b class="pairUrl"></b></li>
-          <li><b>Players</b>: your Sleeper username, or your ESPN league ID</li>
-          <li><b>Feeds</b>: your IPTV: Xtream login (server, username, password) or a Dispatcharr address. Tap <b>Test connection</b>.</li>
+          <li>Scan this code with your phone's camera (same Wi-Fi as the TV). After that, <b>fantasytvapp.com/remote</b> on that phone opens your remote. No camera? Open <b class="pairUrl"></b></li>
+          <li><b>Channels</b> first: your stream server, since FantasyTV plays the games from your IPTV. An Xtream login (server, username, password) or a Dispatcharr address, then <b>Test connection</b>.</li>
+          <li><b>Leagues</b>: your fantasy teams. Your Sleeper username, or your ESPN league ID.</li>
           <li>Tap <b>Save to TV</b>. FantasyTV starts with your teams.</li>
         </ol>
         <div id="allowUpd"></div>

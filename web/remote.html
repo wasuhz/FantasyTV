@@ -67,7 +67,7 @@
   .rw { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
   .rw button { border: 1px solid var(--line); background: var(--panel); border-radius: 6px; padding: 9px 12px; font: 700 12px/1 var(--mono); color: var(--text); }
   .rw .live { margin-left: auto; color: var(--lime); border-color: var(--lime); }
-  .rw span { font: 600 12px/1 var(--mono); color: var(--lime); }
+  .rw span { font: 600 12px/1.2 var(--mono); color: var(--lime); } .rw span:empty { display: none; }
   .dot { width: 10px; height: 10px; border-radius: 50%; background: #475569; flex: none; }
   .dot.ok { background: var(--green); box-shadow: 0 0 8px var(--green); } .dot.bad { background: var(--red); }
   .p.opp { background: rgba(148,163,184,.05); } .p .nm small.vs { color: var(--muted); border: 1px solid var(--line); padding: 0 4px; border-radius: 3px; }
@@ -82,7 +82,16 @@
   .mrow b { font: 700 20px/1 var(--mono); } .mrow b.w { color: var(--green); } .mrow b.l { color: var(--red); }
   .mrow .v { color: var(--dim); text-align: center; }
   .mrow .pj { grid-column: 1 / -1; text-align: center; font: 500 11px/1 var(--mono); color: var(--dim); }
-  .tabs { display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+  .seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 6px; }
+  .seg button { padding: 12px 0; border: 1px solid var(--line); border-radius: 6px; background: var(--panel-2); color: var(--muted); font: 600 13px/1 var(--sans); }
+  .seg button.on { border-color: var(--cyan); background: var(--tint); color: var(--text); box-shadow: inset 0 -3px 0 var(--cyan); }
+  .settings small.note { font: 500 13px/1.5 var(--sans); color: var(--muted); min-height: 2.5em; }
+  .incl { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; font: 500 13px/1.35 var(--sans); }
+  .incl .y { color: var(--text); } .incl .n { color: var(--dim); text-decoration: line-through; }
+  .custom { display: flex; flex-direction: column; gap: 10px; padding-top: 10px; border-top: 1px dashed var(--line); }
+  .settings .watch.ghost { width: 100%; margin: 0; background: none; border-color: var(--line); color: var(--text); }
+  .settings summary.more { font: 600 13px var(--sans); color: var(--muted); margin: 4px 0 8px; }
+  .tabs { display: grid; grid-template-columns: repeat(4, 1fr); border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
   .tab { background: var(--panel); border: 0; border-right: 1px solid var(--line); padding: 13px 0; font: 700 12px/1 var(--mono); letter-spacing: .12em; color: var(--muted); }
   .tab:last-child { border-right: 0; }
   .tab.on { background: var(--tint); color: var(--text); box-shadow: inset 0 3px 0 var(--cyan); }
@@ -139,6 +148,62 @@
   .settings .result.bad { border-color: #7f1d1d; } .settings .result.bad b { color: var(--red); }
   .foot { position: fixed; left: 0; right: 0; bottom: 0; text-align: center; padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
     background: var(--panel); border-top: 1px solid var(--line); font: 500 11px/1.4 var(--mono); color: var(--dim); }
+
+  /* The broadcast look (as the FantasyTV additions page): slanted red segment tags, italic condensed headings,
+     roomy readable text, rounded cards and real switches. */
+  .section { align-self: flex-start; margin: 6px 0 2px; padding: 5px 16px 7px 12px; background: var(--cyan); color: #fff;
+    font: italic 800 19px/1 var(--mono); letter-spacing: .01em; clip-path: polygon(0 0, 100% 0, calc(100% - 10px) 100%, 0 100%); }
+  .settings { padding: 22px 16px 24px; gap: 14px; }
+  .settings .hero { display: grid; gap: 8px; }
+  .settings .hero .kicker { font: 700 13px/1 var(--mono); letter-spacing: .18em; text-transform: uppercase; color: #ff6b74; }
+  .settings .hero h2 { margin: 0; font: italic 800 46px/.95 var(--mono); color: var(--text); }
+  .settings .hero h2 span { color: var(--cyan); }
+  .tabs { gap: 6px; border: 0; border-radius: 0; overflow: visible; }
+  .tab, .tab:last-child { border: 1px solid var(--line); border-radius: 999px; background: var(--panel); padding: 11px 0 12px;
+    font: italic 800 16px/1 var(--mono); letter-spacing: .02em; color: var(--muted); }
+  .tab.on { background: var(--cyan); border-color: var(--cyan); color: #fff; box-shadow: none; }
+  .pane { gap: 14px; }
+  .settings .card { border-radius: 14px; padding: 16px; gap: 12px; }
+  .settings label { font: 600 14px/1.25 var(--sans); letter-spacing: 0; text-transform: none; color: var(--muted); }
+  .settings input, .settings select { padding: 13px 12px; border-radius: 10px; background: var(--bg); font: 500 16px/1.2 var(--sans); }
+  .settings small { font: 400 14px/1.5 var(--sans); color: var(--muted); }
+  .settings small.note { font: 500 15px/1.5 var(--sans); color: var(--text); min-height: 0; }
+  .settings label.chk { padding: 14px 16px; border-radius: 12px; background: var(--bg); font: 500 16px/1.35 var(--sans); }
+  .settings label.chk input[type=checkbox] { appearance: none; -webkit-appearance: none; width: 46px; height: 26px; padding: 0; border: 0;
+    border-radius: 13px; background: #1b4a85; position: relative; transition: background .2s; }
+  .settings label.chk input[type=checkbox]::before { content: ''; position: absolute; left: 3px; top: 3px; width: 20px; height: 20px;
+    border-radius: 50%; background: #8494b2; transition: left .2s, background .2s; }
+  .settings label.chk input[type=checkbox]:checked { background: var(--cyan); }
+  .settings label.chk input[type=checkbox]:checked::before { left: 23px; background: #fff; }
+  .seg { gap: 6px; }
+  .seg button { padding: 12px 0 13px; border-radius: 10px; background: var(--bg); font: italic 800 17px/1 var(--mono); letter-spacing: .01em; }
+  .seg button.on { background: var(--cyan); border-color: var(--cyan); color: #fff; box-shadow: none; }
+  .incl { gap: 8px; font: 500 15px/1.35 var(--sans); }
+  .custom { gap: 12px; padding-top: 14px; }
+  .settings .watch { border-radius: 10px; padding: 13px; font: 700 14px/1 var(--mono); letter-spacing: .1em; }
+  .settings .result { border-radius: 10px; font: 400 14px/1.55 var(--sans); }
+  .settings .result b { font: italic 800 18px/1.2 var(--mono); margin-bottom: 4px; }
+  .settings .sub { font: 700 17px/1 var(--mono); }
+  .teamrow, .trk, .gc, .rule { border-radius: 12px; }
+  .settings summary.more { font: 600 15px var(--sans); }
+  .settings > .two:last-child { position: sticky; bottom: 36px; z-index: 1; padding: 10px 0 12px; background: var(--bg); }
+  /* First setup: a guide over the tabs, server first, then fantasy teams */
+  #guide { display: grid; gap: 12px; padding: 18px 16px; border-radius: 14px; background: var(--panel); border: 1px solid var(--cyan); box-shadow: 0 0 0 3px rgba(232,32,46,.15); }
+  #guide[hidden] { display: none; }
+  #guide .steps { display: flex; gap: 6px; }
+  #guide .steps i { flex: 1; height: 5px; border-radius: 3px; background: var(--line); }
+  #guide .steps i.on { background: var(--cyan); } #guide .steps i.done { background: var(--green); }
+  #guide .k { font: 700 13px/1 var(--mono); letter-spacing: .14em; color: var(--cyan); text-transform: uppercase; }
+  #guide h3 { margin: 0; font: italic 800 26px/1.05 var(--mono); }
+  #guide p { margin: 0; font: 400 16px/1.5 var(--sans); color: var(--text); }
+  #guide p small { display: block; margin-top: 6px; }
+  #guide ol { margin: 0; padding-left: 22px; display: grid; gap: 8px; font: 500 16px/1.45 var(--sans); }
+  #guide ol b { color: #fff; }
+  #guide .st { padding: 10px 12px; border-radius: 10px; background: var(--bg); font: 500 15px/1.4 var(--sans); color: var(--muted); }
+  #guide .st.ok { color: var(--green); }
+  #guide .go { width: 100%; margin: 0; border-radius: 10px; padding: 15px; background: var(--cyan); border-color: var(--cyan); color: #fff; font: italic 800 18px/1 var(--mono); letter-spacing: .03em; }
+  #guide .go:disabled { background: var(--bg); border-color: var(--line); color: var(--dim); }
+  #guide .later { justify-self: center; background: none; border: 0; color: var(--muted); font: 500 14px var(--sans); text-decoration: underline; padding: 4px; }
 </style>
 </head>
 <body>
@@ -151,47 +216,116 @@
 </header>
 <div class="pending" id="pending"><div class="t"><small>SWITCHING TO</small><span id="pTo"></span></div><span class="s" id="pSecs"></span><button id="pCancel">CANCEL</button></div>
 <form id="settings" class="settings" hidden novalidate>
-  <div id="welcome" class="result ok" hidden><b>Welcome to FantasyTV</b>1 · Players: your Sleeper username, or your ESPN league ID<br>2 · Feeds: your Xtream login (or Dispatcharr), then Test connection<br>3 · Save to TV</div>
+  <div class="hero"><div class="kicker">FantasyTV · on your TV</div><h2>Settings<span>.</span></h2></div>
+  <div id="guide" hidden></div>
   <div class="tabs" role="tablist">
-    <button type="button" class="tab on" data-tab="general">GENERAL</button>
-    <button type="button" class="tab" data-tab="feeds">FEEDS</button>
-    <button type="button" class="tab" data-tab="players">PLAYERS</button>
+    <button type="button" class="tab on" data-tab="general">WATCH</button>
+    <button type="button" class="tab" data-tab="alerts">ALERTS</button>
+    <button type="button" class="tab" data-tab="players">LEAGUES</button>
+    <button type="button" class="tab" data-tab="feeds">CHANNELS</button>
   </div>
 
   <div class="pane" data-pane="general">
-    <label class="chk">Hide spoilers for current game<input type="checkbox" name="hideSpoilers"></label>
-    <small>The game on the TV shows no score or points here, since your phone is ahead of the stream.</small>
-    <label class="chk">Split screen when two of your drives are hot at once<input type="checkbox" name="splitScreen"></label>
-    <label class="chk">Smooth playback (tunneled video, like TiviMate). On by default on slower TVs; it stops the TV reading the game clock and commercials off the picture<input type="checkbox" name="tunnel"></label>
-    <label class="chk">Save score-bug samples (for development: helps FantasyTV learn to read each network's clock)<input type="checkbox" name="captureBugs"></label>
-    <label class="chk">Rewind (the last minute, for instant replays). Off by default on slower TVs, where it can make the picture stutter<input type="checkbox" name="rewind"></label>
-    <small>The game on screen moves left (with its sound), the other plays muted on the right, until it cools off. Uses a second stream from your IPTV. The ⧉ button on a game card splits with it yourself.</small>
-    <label class="chk">Matchup scores on the TV (you vs your opponent, each league)<input type="checkbox" name="showMatchups"></label>
-    <label class="chk">Points popups on the TV<input type="checkbox" name="pointsPopups"></label>
-    <label class="chk">Win-chance swing alerts (a matchup moves 20%+)<input type="checkbox" name="swingAlerts"></label>
-    <label class="chk">Opponent alerts (their touchdowns, big plays, red zone)<input type="checkbox" name="dangerAlerts"></label>
-    <label class="chk">Injury alerts (one of your starters gets hurt)<input type="checkbox" name="injuryAlerts"></label>
-    <div class="two"><label>Popup timing<select name="popupTiming"><option value="now">Instant; the game I'm watching waits for my stream</option><option value="skipWatching">Instant; none for the game I'm watching</option><option value="all">Delay every game (mine still waits for my stream)</option><option value="stream">Every game waits for its stream</option></select></label>
-      <label>Minimum delay (s)<input name="popupDelay" type="number" min="0" max="120"></label></div>
-    <small>Any play that gains one of your starters something (yards, a catch, a touchdown, a kick), in any game: "7 YDS · B. Robinson · 7-yd run". ESPN reports it seconds after the play, usually before your stream shows it.</small>
-    <label class="chk">Catch big plays before they air<input type="checkbox" name="lookahead"></label>
-    <small>ESPN reports plays before your stream shows them. When one of your starters makes a big play (touchdown, 20+ yards) in another game, the TV switches there in time to watch it. Needs the stream delay right (use Sync below).</small>
-    <label class="chk">Show opponent's players in game cards<input type="checkbox" name="showOpp"></label>
-    <label>How much your opponents' players count in AutoTune (0 = not at all, 100 = same as yours)
-      <span class="pct"><input name="oppWeight" type="number" min="0" max="100" step="5"><b>%</b></span></label>
-    <label>Favorite teams (their games always count as hearted)<input name="favTeams" placeholder="e.g. NO, DAL" autocapitalize="characters"></label>
-    <label>Blackout teams (never AutoTune to their games)<input name="blackout" placeholder="e.g. NYJ" autocapitalize="characters"></label>
-    <div class="two"><label>Stream delay (s)<input name="delay" type="number" min="0" max="180"></label>
-      <label>Cooldown (s)<input name="cooldown" type="number" min="20" max="600"></label></div>
-    <small>Stream delay: how far your IPTV runs behind live. The TV waits this long before reacting, so it never spoils a play.</small>
-    <label>Sync delay with the TV clock<span class="pct"><input id="clockIn" placeholder="Game clock on the TV now, e.g. 8:42" inputmode="numeric"><button type="button" class="eye" id="clockBtn" style="position:static">SYNC</button></span></label>
-    <small>Type the clock you see on the TV for the game playing; the TV works out the delay and saves it.</small>
-    <label>Games<select name="mode"><option value="live">Live games</option><option value="sim">Practice Sunday (simulated)</option></select></label>
-    <button type="button" class="watch" id="tourBtn" style="width:100%;margin:0 0 10px;background:none;border-color:var(--line);color:var(--text)">SHOW THE REMOTE TOUR ON THE TV</button>
-    <div class="sub">FantasyTV on the TV <span id="tvVersion"></span></div>
-    <div class="result ok" id="updNote" hidden></div>
-    <label class="chk">Install updates automatically (waits until no game is live)<input type="checkbox" name="autoUpdate"></label>
-    <button type="button" class="watch" id="updBtn" style="width:100%;margin:0;background:none;border-color:var(--line);color:var(--text)">CHECK FOR UPDATE</button>
+    <div class="card">
+      <div class="section">AUTOTUNE · HOW IT PICKS GAMES</div>
+      <input type="hidden" name="tunePreset">
+      <div class="seg" data-input="tunePreset">
+        <button type="button" data-v="steady" data-note="Stays on a game longer and follows only your players. No jumping ahead for big plays, no split screen.">Steady</button>
+        <button type="button" data-v="balanced" data-note="Follows your players, jumps to another game in time for a big play, and splits the screen when two of your drives are hot.">Balanced</button>
+        <button type="button" data-v="chase" data-note="Switches fast (45 s between changes) and counts your opponents' players at half weight. Busy.">Chase it</button>
+        <button type="button" data-v="custom" data-note="Set each part yourself.">Custom</button>
+      </div>
+      <small class="note"></small>
+      <ul class="incl"></ul>
+      <div class="custom" data-custom="tunePreset">
+        <label class="chk">Catch big plays before they air<input type="checkbox" name="lookahead"></label>
+        <small>ESPN reports plays before your stream shows them. When one of your starters makes a big play (touchdown, 20+ yards) in another game, the TV switches there in time to watch it. Needs the stream delay right.</small>
+        <label class="chk">Split screen when two of your drives are hot<input type="checkbox" name="splitScreen"></label>
+        <small>The game on screen moves left (with its sound), the other plays muted on the right, until it cools off. Uses a second stream from your IPTV.</small>
+        <div class="two"><label>Time between changes (s)<input name="cooldown" type="number" min="20" max="600"></label>
+          <label>Opponents count<span class="pct"><input name="oppWeight" type="number" min="0" max="100" step="5"><b>%</b></span></label></div>
+        <small>Opponents count: how much their players matter when picking a game (0 = not at all, 100 = same as yours).</small>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="section">PERFORMANCE · THIS TV</div>
+      <input type="hidden" name="perf">
+      <div class="seg" data-input="perf">
+        <button type="button" data-v="auto" data-note="FantasyTV picks for this TV.">Auto</button>
+        <button type="button" data-v="smooth" data-note="For lower-powered TVs and sticks: the smoothest picture. Rewind is off.">Smooth</button>
+        <button type="button" data-v="full" data-note="Rewind of the game you're watching, and the sharpest clock reading. Best on powerful boxes like the NVIDIA Shield.">Full</button>
+        <button type="button" data-v="custom" data-note="Set each part yourself.">Custom</button>
+      </div>
+      <small class="note"></small>
+      <ul class="incl"></ul>
+      <div class="custom" data-custom="perf">
+        <label class="chk">Smooth playback (video straight to the screen, like TiviMate)<input type="checkbox" name="tunnel"></label>
+        <label class="chk">Rewind (keeps the last minute of the game you're watching, for instant replays)<input type="checkbox" name="rewind"></label>
+        <small>On slower TVs, Rewind without Smooth playback can make the picture stutter.</small>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="section">ON SCREEN</div>
+      <label class="chk">Matchup scores on the TV (you vs your opponent, each league)<input type="checkbox" name="showMatchups"></label>
+      <label class="chk">Hide spoilers on this phone<input type="checkbox" name="hideSpoilers"></label>
+      <small>The game on the TV shows no score or points here, since your phone is ahead of the stream.</small>
+      <label>Favorite teams (their games always count as hearted)<input name="favTeams" placeholder="NO, DAL" autocapitalize="characters"></label>
+      <label>Blackout teams (never AutoTune to their games)<input name="blackout" placeholder="NYJ" autocapitalize="characters"></label>
+    </div>
+
+    <div class="card">
+      <div class="section">STREAM DELAY</div>
+      <div class="two"><label>Behind live (s)<input name="delay" type="number" min="0" max="180"></label>
+        <label>Or sync: TV clock now<span class="pct"><input id="clockIn" placeholder="8:42" inputmode="numeric"><button type="button" class="eye" id="clockBtn" style="position:static">SYNC</button></span></label></div>
+      <small>How far your IPTV runs behind live, so the TV never spoils a play. Easiest: type the game clock you see on the TV and tap Sync.</small>
+    </div>
+
+    <div class="card">
+      <div class="section">THIS TV</div>
+      <label>Games<select name="mode"><option value="live">Live games</option><option value="sim">Practice Sunday (simulated)</option></select></label>
+      <div class="sub">FantasyTV on the TV <span id="tvVersion"></span></div>
+      <div class="result ok" id="updNote" hidden></div>
+      <label class="chk">Install updates automatically (waits until no game is live)<input type="checkbox" name="autoUpdate"></label>
+      <div class="two"><button type="button" class="watch ghost" id="updBtn">CHECK FOR UPDATE</button>
+        <button type="button" class="watch ghost" id="tourBtn">REMOTE TOUR</button></div>
+      <details><summary class="more">Developer</summary>
+        <label class="chk">Save score-bug samples (helps FantasyTV learn to read each network's clock)<input type="checkbox" name="bugSamples"></label>
+      </details>
+    </div>
+  </div>
+
+  <div class="pane" data-pane="alerts" hidden>
+    <div class="card">
+      <div class="section">ALERTS ON THE TV</div>
+      <input type="hidden" name="alertsPreset">
+      <div class="seg" data-input="alertsPreset">
+        <button type="button" data-v="quiet" data-note="Only the moments that matter: your starters' big plays (5+ points), injuries and big swings.">Quiet</button>
+        <button type="button" data-v="mine" data-note="Every play that earns your starters points, plus injuries and swings.">More</button>
+        <button type="button" data-v="all" data-note="Very busy: everything in More, plus your opponents' touchdowns, big plays and red zone trips.">Everything</button>
+        <button type="button" data-v="custom" data-note="Pick each alert yourself.">Custom</button>
+      </div>
+      <small class="note"></small>
+      <ul class="incl"></ul>
+      <div class="custom" data-custom="alertsPreset">
+        <label class="chk">Your players' points (yards, catches, touchdowns, kicks)<input type="checkbox" name="pointsPopups"></label>
+        <label>Points popups for<select name="popupMin"><option value="0">Every play that scores</option><option value="2">Plays worth 2+ points</option><option value="5">Big plays (5+ points)</option><option value="6">Touchdowns (6+ points)</option></select></label>
+        <label>Touchdown in the game you're watching<select name="tdHere"><option value="full">Full moment (photo pops out, bar flashes)</option><option value="glow">Card glow only</option><option value="off">Nothing</option></select></label>
+        <label>Your touchdown in another game<select name="tdAway"><option value="small">Small popup, once it airs there</option><option value="full">Full-screen banner, right away</option><option value="off">Nothing</option></select></label>
+        <small>A popup never shows for the game you're watching: you see the play, and the player's card lights up instead.</small>
+        <label class="chk">Injuries (one of your starters gets hurt)<input type="checkbox" name="injuryAlerts"></label>
+        <label class="chk">Win-chance swings (a matchup moves 20%+)<input type="checkbox" name="swingAlerts"></label>
+        <label class="chk">Opponents' big plays (touchdowns, big gains, red zone)<input type="checkbox" name="dangerAlerts"></label>
+        <label class="chk">Opponents' players in game cards<input type="checkbox" name="showOpp"></label>
+      </div>
+    </div>
+    <div class="card">
+      <div class="section">TIMING</div>
+      <div class="two"><label>When<select name="popupTiming"><option value="now">Instant (the game I'm watching waits for my stream)</option><option value="all">Delay every game</option><option value="stream">Every game waits for its stream</option></select></label>
+        <label>Minimum delay (s)<input name="popupDelay" type="number" min="0" max="120"></label></div>
+      <small>ESPN reports a play seconds after it happens, usually before your stream shows it. The game you're watching never gets popups: you see the play, and the card lights up./small>
+    </div>
   </div>
 
   <div class="pane" data-pane="feeds" hidden>
@@ -348,7 +482,7 @@ function draw() {
     document.getElementById('pTo').textContent = g ? `${g.away.abbr} @ ${g.home.abbr} · ${s.pending.why}` : s.pending.why;
   }
   // The TV's clock and the phone's can differ by a lot: judge by when the TV last sent something new.
-  document.getElementById('rwText').textContent = s.behind ? `${s.behind}s behind live` : '';
+  document.getElementById('rwText').textContent = s.behind ? `${s.behind}s behind live` : 'Rewinds the game on the TV';
   document.getElementById('tvVersion').textContent = s.version ? 'v' + s.version : '';
   const upd = document.getElementById('updNote');
   upd.hidden = !s.update;
@@ -414,16 +548,27 @@ document.getElementById('pCancel').onclick = () => { link.send({ type: 'cancel' 
 // Settings live on the TV (/api/config); saving restarts the TV page with them.
 const form = document.getElementById('settings');
 const DEFAULTS = { sleeper: '', mode: 'live', delay: 30, cooldown: 75, iptvBase: '', xtServer: '', xtUser: '', xtPass: '',
-  hideSpoilers: true, showOpp: true, lookahead: true, pointsPopups: true, swingAlerts: true, dangerAlerts: false, injuryAlerts: true, popupTiming: 'now', popupDelay: 25, autoUpdate: false, splitScreen: true, showMatchups: true, oppWeight: 0, favTeams: '', blackout: '', skipLeagues: [], tracked: [], espnLeagues: [], captureBugs: false };
+  hideSpoilers: true, showOpp: false, lookahead: true, pointsPopups: true, swingAlerts: true, dangerAlerts: false, injuryAlerts: true, popupTiming: 'now', popupDelay: 25, autoUpdate: true, splitScreen: true, showMatchups: true, oppWeight: 0, favTeams: '', blackout: '', skipLeagues: [], tracked: [], espnLeagues: [], bugSamples: false, perf: 'auto', tunePreset: 'balanced', alertsPreset: 'quiet', popupMin: 5, tdHere: 'full', tdAway: 'small' };
 let cfg = { ...DEFAULTS };
 document.getElementById('gear').onclick = async () => {
   if (!form.hidden) { form.hidden = true; return; }
   try { cfg = Object.assign({}, DEFAULTS, await (await fetch('/api/config', { cache: 'no-store' })).json()); } catch { cfg = { ...DEFAULTS }; }
   for (const el of form.elements) {
     if (!el.name) continue;
-    if (el.type === 'checkbox') el.checked = el.name === 'rewind' || el.name === 'tunnel' ? cfg[el.name] ?? (state ? state[el.name] !== false : true) : cfg[el.name] !== false;   // rewind and smooth playback: their default depends on the TV
+    if (el.type === 'checkbox') el.checked = cfg[el.name] !== false;
     else el.value = cfg[el.name] ?? '';
   }
+  if (cfg.popupTiming === 'skipWatching') form.elements.popupTiming.value = 'now';   // retired: on-screen cards already skip popups
+  // Performance's own switches start from what the TV plays with now.
+  form.elements.tunnel.checked = cfg.tunnel ?? !!(state && state.tunnel);
+  form.elements.rewind.checked = cfg.rewind ?? !(state && state.rewind === false);
+  // The presets: the one saved if the settings still match it, else whichever matches, else Custom (nothing set by
+  // hand is lost).
+  for (const name of Object.keys(PRESETS)) {
+    const saved = cfg[name], all = PRESETS[name];
+    pickSeg(name, all[saved] && matches(all[saved]) ? saved : Object.keys(all).find(k => matches(all[k])) || 'custom', false);
+  }
+  pickSeg('perf', ['auto', 'smooth', 'full', 'custom'].includes(cfg.perf) ? cfg.perf : 'auto', false);
   cfg.channelRules = Object.assign({ games: {}, teams: {}, networks: {} }, cfg.channelRules || {});
   drawTeams();
   drawTracked();
@@ -434,6 +579,92 @@ document.getElementById('gear').onclick = async () => {
   scrollTo(0, 0);
 };
 document.getElementById('setCancel').onclick = () => { form.hidden = true; };
+
+// Good · better · best presets, each with Custom: picking one fills in its switches (Custom shows them).
+const PRESETS = {
+  tunePreset: {
+    steady: { lookahead: false, splitScreen: false, cooldown: 150, oppWeight: 0 },
+    balanced: { lookahead: true, splitScreen: true, cooldown: 75, oppWeight: 0 },
+    chase: { lookahead: true, splitScreen: true, cooldown: 45, oppWeight: 50 },
+  },
+  alertsPreset: {
+    quiet: { pointsPopups: true, popupMin: 5, tdHere: 'full', tdAway: 'small', injuryAlerts: true, swingAlerts: true, dangerAlerts: false, showOpp: false },
+    mine: { pointsPopups: true, popupMin: 0, tdHere: 'full', tdAway: 'small', injuryAlerts: true, swingAlerts: true, dangerAlerts: false, showOpp: false },
+    all: { pointsPopups: true, popupMin: 0, tdHere: 'full', tdAway: 'full', injuryAlerts: true, swingAlerts: true, dangerAlerts: true, showOpp: false },
+  },
+};
+// Performance, spelled out (Auto shows whichever it picked on this TV).
+const PERF_INCLUDES = {
+  smooth: [
+    [true, 'Smooth playback: the video goes straight from the decoder to the screen, the smoothest picture on lower-powered TVs'],
+    [false, "Rewind: no ◀ 10 s / 30 s on the game you're watching (keeping its last minute made the picture stutter on these TVs)"],
+    [true, 'Game clock and commercials read from a copy of the stream (a frame every 3 s), where this TV can read them'],
+  ],
+  full: [
+    [false, "Smooth playback: the TV's normal video path, already smooth on powerful boxes"],
+    [true, "Rewind: the last minute of the game you're watching, for ◀ 10 s / 30 s. Other games can't be rewound: switching to one starts it live"],
+    [true, 'Game clock and commercials read straight off the screen, the sharpest reading'],
+  ],
+};
+// What a preset turns on and off, in words (the list under its row).
+const INCLUDES = {
+  pointsPopups: v => [v, "Your players' points popups (bottom right)"],
+  popupMin: (v, all) => all.pointsPopups && [true, ['', '', 'Only plays worth 2+ points', '', '', 'Only big plays: 5+ points', 'Only touchdowns: 6+ points'][v] || 'Every play that scores, even 0.1'],
+  injuryAlerts: v => [v, 'Injury alerts for your starters'],
+  swingAlerts: v => [v, 'Win-chance swings (a matchup moves 20%+)'],
+  dangerAlerts: v => [v, "Opponents' touchdowns, big plays and red zone"],
+  showOpp: () => false,   // a Custom-only extra: not worth a line in every preset
+  tdHere: v => [v !== 'off', { full: "Touchdown moment in the game you're watching: his photo pops out, the bar flashes", glow: "Touchdowns in the game you're watching: his card glows, no banner", off: "No touchdown moment in the game you're watching" }[v]],
+  tdAway: v => [v !== 'off', { small: "Your touchdowns in other games: a small popup once the play airs on that channel (no spoiler)", full: 'Your touchdowns in other games: the full-screen banner, as soon as ESPN reports them', off: 'No popup for your touchdowns in other games' }[v]],
+  lookahead: v => [v, 'Jumps to another game in time for your big plays'],
+  splitScreen: v => [v, 'Split screen when two of your drives are hot'],
+  cooldown: v => [true, `${v} s at least between game changes`],
+  oppWeight: v => [v > 0, v > 0 ? `Opponents' players count ${v}% as much as yours` : "Opponents' players move the TV too"],
+};
+function drawIncludes(name, v) {
+  const ul = form.querySelector(`.seg[data-input="${name}"] ~ .incl`), all = PRESETS[name][v];
+  ul.hidden = !all;
+  if (!all) return;
+  ul.innerHTML = Object.entries(all).map(([k, x]) => INCLUDES[k](x, all)).filter(Boolean)
+    .map(([on, text]) => `<li class="${on ? 'y' : 'n'}">${on ? '✓' : '✕'} ${esc(text)}</li>`).join('');
+}
+const fieldVal = el => el.type === 'checkbox' ? el.checked : /^\d+$/.test(el.value) ? +el.value : el.value;
+const matches = values => Object.entries(values).every(([k, v]) => fieldVal(form.elements[k]) === v);
+function setFields(values) {
+  for (const [k, v] of Object.entries(values)) {
+    const el = form.elements[k];
+    if (el.type === 'checkbox') el.checked = v; else el.value = v;
+  }
+}
+/** Select an option of a preset row; `apply` fills in its switches (a tap, not opening Settings). */
+function pickSeg(name, v, apply) {
+  const seg = form.querySelector(`.seg[data-input="${name}"]`);
+  form.elements[name].value = v;
+  let note = '';
+  for (const b of seg.querySelectorAll('button')) {
+    b.classList.toggle('on', b.dataset.v === v);
+    if (b.dataset.v === v) note = b.dataset.note;
+  }
+  if (name === 'perf' && v === 'auto' && state && 'tunnel' in state) note = `FantasyTV picks for this TV: ${state.tunnel ? 'Smooth' : 'Full'} here.`;
+  seg.nextElementSibling.textContent = note;
+  if (PRESETS[name]) drawIncludes(name, v);
+  if (name === 'perf') {
+    const ul = seg.parentElement.querySelector('.incl'), list = PERF_INCLUDES[v === 'auto' ? (state && state.tunnel ? 'smooth' : 'full') : v];
+    ul.hidden = !list;
+    if (list) ul.innerHTML = list.map(([on, text]) => `<li class="${on ? 'y' : 'n'}">${on ? '✓' : '✕'} ${esc(text)}</li>`).join('');
+  }
+  form.querySelector(`.custom[data-custom="${name}"]`).hidden = v !== 'custom';
+  if (!apply) return;
+  if (PRESETS[name] && PRESETS[name][v]) setFields(PRESETS[name][v]);
+  if (name === 'perf' && v !== 'custom') {
+    const smooth = v === 'smooth' || (v === 'auto' && !!(state && state.tunnel));
+    setFields({ tunnel: smooth, rewind: !smooth });
+  }
+}
+for (const seg of form.querySelectorAll('.seg')) seg.onclick = e => {
+  const b = e.target.closest('button');
+  if (b) pickSeg(seg.dataset.input, b.dataset.v, true);
+};
 
 // General · Feeds · Players
 for (const t of form.querySelectorAll('.tab')) t.onclick = () => {
@@ -493,6 +724,7 @@ async function syncSleeper() {
       : `<b>Found ${esc(name)}, but no teams this season.</b>Check you're in a Sleeper NFL league for this year.`;
     if (saved) link.send({ type: 'syncRosters' });
     drawTeams();
+    guideCheck();
   } catch (e) {
     found = null;
     out.className = 'result bad';
@@ -509,7 +741,7 @@ let espnFound = null;   // {cfg, league, teams}
 async function saveEspn() {
   try {
     const cur = await (await fetch('/api/config', { cache: 'no-store' })).json();
-    await fetch('/api/config', { method: 'POST', body: JSON.stringify({ ...cur, espnLeagues: cfg.espnLeagues }) });
+    await fetch('/api/config', { method: 'POST', body: JSON.stringify({ ...DEFAULTS, ...cur, espnLeagues: cfg.espnLeagues }) });
   } catch { /* TV gone */ }
   link.send({ type: 'syncRosters' });
 }
@@ -562,6 +794,7 @@ document.getElementById('espnTeams').addEventListener('click', e => {
   espnFound = null;
   saveEspn();
   drawEspn();
+  guideCheck();
 });
 document.getElementById('espnList').addEventListener('click', e => {
   const b = e.target.closest('[data-rmespn]');
@@ -600,7 +833,7 @@ async function saveRules() {
   const r = rulesOf();
   try {
     const cur = await (await fetch('/api/config', { cache: 'no-store' })).json();
-    await fetch('/api/config', { method: 'POST', body: JSON.stringify({ ...cur, channelRules: r }) });
+    await fetch('/api/config', { method: 'POST', body: JSON.stringify({ ...DEFAULTS, ...cur, channelRules: r }) });
   } catch { /* TV gone; the command below still applies it */ }
   link.send({ type: 'rules', rules: r });
 }
@@ -770,8 +1003,9 @@ function report(ok, title, lines, add) {
   const html = `<div class="result ${ok ? 'ok' : 'bad'}"><b>${esc(title)}</b>${lines.map(esc).join('<br>')}</div>`;
   testOut.hidden = false;
   testOut.innerHTML = add ? testOut.innerHTML + html : html;
-  // First setup: say what's next, or nothing seems to happen.
-  if (ok && !cfg.sleeper && !testOut.querySelector('.next'))
+  if (ok) guideCheck(true);
+  // First setup: say what's next, or nothing seems to happen (the guide says it when it's up).
+  if (ok && !guide.step && !cfg.sleeper && !testOut.querySelector('.next'))
     testOut.insertAdjacentHTML('beforeend', '<div class="result ok next"><b>Next: tap SAVE TO TV</b>Then the TV loads your teams and AutoTune starts.</div>');
 }
 async function getText(url, ms = 20000) {
@@ -825,19 +1059,67 @@ form.onsubmit = async e => {
     if (!el.name) continue;
     cfg[el.name] = el.type === 'checkbox' ? el.checked : el.type === 'number' ? +el.value : el.value.trim();
   }
+  if (cfg.perf !== 'custom') { delete cfg.tunnel; delete cfg.rewind; }   // their own switches count only in Custom
   await fetch('/api/config', { method: 'POST', body: JSON.stringify(cfg) });
   await link.send({ type: 'reload' });
   form.hidden = true;
 };
 
-// A new TV (no Sleeper username yet): open setup straight away, on Players.
+// First setup on a new TV: a guide over Settings, in the order things work. 1, your stream server (FantasyTV has no
+// channels of its own, it plays your IPTV), tested from the TV; 2, your fantasy teams; then Save to TV.
+const guide = { step: null, server: false };
+const haveTeams = () => !!((found && found.length) || (cfg.espnLeagues || []).length);
+function drawGuide() {
+  const g = document.getElementById('guide'), s = guide.step;
+  g.hidden = !s;
+  if (!s) return;
+  const bar = ['intro', 'server', 'teams'].map((k, i, all) => `<i class="${k === s ? 'on' : all.indexOf(s) > i ? 'done' : ''}"></i>`).join('');
+  if (s === 'intro') g.innerHTML = `<div class="steps">${bar}</div><div class="k">Welcome to FantasyTV</div>
+    <h3>Two things to set up, in this order</h3>
+    <ol><li><b>Your stream server.</b> FantasyTV doesn't come with channels: it plays the games from <b>your</b> IPTV service (an Xtream Codes login, or a Dispatcharr server).</li>
+      <li><b>Your fantasy teams.</b> Sleeper or ESPN, so it knows which games matter to you.</li></ol>
+    <p><small>About two minutes. Your logins stay on your TV.</small></p>
+    <button type="button" class="watch go" data-guide="server">START: ADD MY SERVER</button>`;
+  else if (s === 'server') g.innerHTML = `<div class="steps">${bar}</div><div class="k">Step 1 of 2</div>
+    <h3>Add your stream server</h3>
+    <p>Below: your <b>Xtream server, username and password</b> (the same ones TiviMate uses), or a Dispatcharr address. Then tap <b>TEST CONNECTION</b>.</p>
+    <div class="st ${guide.server ? 'ok' : ''}">${guide.server ? '✓ Your TV reached the server.' : 'Waiting for a successful TEST CONNECTION…'}</div>
+    <button type="button" class="watch go" data-guide="teams" ${guide.server ? '' : 'disabled'}>NEXT: MY FANTASY TEAMS</button>
+    ${guide.server ? '' : '<button type="button" class="later" data-guide="teams">Skip for now: no games will play until a server is added</button>'}`;
+  else g.innerHTML = `<div class="steps">${bar}</div><div class="k">Step 2 of 2</div>
+    <h3>Add your fantasy teams</h3>
+    <p>Below: your <b>Sleeper username</b> then SYNC NOW, or your <b>ESPN league ID</b> then pick your team. Both work, up to 4 leagues.</p>
+    <div class="st ${haveTeams() ? 'ok' : ''}">${haveTeams() ? '✓ Your teams are in.' : 'Waiting for a league…'}</div>
+    <button type="button" class="watch go" data-guide="save" ${haveTeams() ? '' : 'disabled'}>SAVE TO TV AND START</button>
+    <button type="button" class="later" data-guide="server">Back to step 1</button>`;
+}
+function guideTo(step) {
+  guide.step = step;
+  if (step === 'server') form.querySelector('.tab[data-tab=feeds]').click();
+  if (step === 'teams') form.querySelector('.tab[data-tab=players]').click();
+  drawGuide();
+  scrollTo({ top: 0, behavior: 'smooth' });
+}
+document.getElementById('guide').addEventListener('click', e => {
+  const to = e.target.dataset.guide;
+  if (!to) return;
+  if (to === 'save') { guide.step = null; drawGuide(); form.requestSubmit(); }
+  else guideTo(to);
+});
+// Called when a test connects, Sleeper finds teams, or an ESPN team is picked.
+function guideCheck(serverOk) {
+  if (serverOk) guide.server = true;
+  if (guide.step) drawGuide();
+}
+
+// A new TV (no fantasy teams yet): open Settings with the guide. If the server is already in, it starts at step 2.
 (async () => {
   try {
     const c = await (await fetch('/api/config', { cache: 'no-store' })).json();
     if (c.sleeper || (c.espnLeagues || []).length) return;
-    document.getElementById('welcome').hidden = false;
     await document.getElementById('gear').onclick();
-    form.querySelector('.tab[data-tab=players]').click();
+    guide.server = !!(c.xtServer || c.iptvBase);
+    guideTo(guide.server ? 'teams' : 'intro');
   } catch { /* TV not answering yet */ }
 })();
 

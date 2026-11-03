@@ -42,7 +42,7 @@ import java.util.regex.Pattern;
  * Each pass reports {quarter, clock or -1, logo seen}. Nothing leaves the TV.
  * <p>
  * The recognition itself runs in {@link OcrService}, a process of its own: on some TV chips Google's library dies with an
- * illegal instruction, and there that only ends the helper. After a few such deaths the reader stays off on this TV.
+ * illegal instruction, and there that only ends the helper. After one such death the reader stays off on this TV.
  */
 final class ClockReader {
     private static final String TAG = "FantasyTVClock";
@@ -75,12 +75,12 @@ final class ClockReader {
     private volatile boolean asking;
 
     /**
-     * The helper dying mid-read (the chip can't run Google's library): counted per TV; at DEATHS it's off for good here
+     * The helper dying mid-read (the chip can't run Google's library): off for good on this TV the first time
      * (the stream delay setting and the phone's clock sync still work). Reads that just fail with an error rest after
      * GIVE_UP in a row, until the app opens again.
      */
-    private static final String PREFS = "clock3", DIED = "died", OFF = "off";
-    private static final int DEATHS = 3, GIVE_UP = 40;
+    private static final String PREFS = "clock3", OFF = "off";
+    private static final int GIVE_UP = 40;
     private final SharedPreferences prefs;
     private volatile boolean off;
     private int fails;
@@ -123,14 +123,10 @@ final class ClockReader {
     }
 
     private void died() {
-        int d = prefs.getInt(DIED, 0) + 1;
-        Log.w(TAG, "the text-recognition helper crashed (" + d + " of " + DEATHS + ")");
-        if (d >= DEATHS) {
-            off = true;
-            Log.w(TAG, "clock reading is off on this TV: its chip can't run Google's text recognition");
-            try { context.unbindService(connection); } catch (IllegalArgumentException ignored) { }
-        }
-        prefs.edit().putInt(DIED, d).putBoolean(OFF, off).apply();
+        off = true;
+        Log.w(TAG, "the text-recognition helper crashed: clock reading is off on this TV (its chip can't run Google's text recognition)");
+        try { context.unbindService(connection); } catch (IllegalArgumentException ignored) { }
+        prefs.edit().putBoolean(OFF, true).apply();
         answer.offer(new Bundle());   // wake the read that was waiting
     }
 

@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FantasyTV demo</title>
+<meta name="robots" content="noindex">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Saira+Condensed:ital,wght@0,500;0,600;0,700;0,800;1,700;1,800&family=Barlow:wght@500;600;700&display=swap" rel="stylesheet">
+<!-- The TV app's own styles (copies of web/css/app.css and the <style> in web/tv.html), so this looks like the TV -->
+<link rel="stylesheet" href="app.css">
+<link rel="stylesheet" href="tv.css">
+<style>
+  #stage { background: #000 url(img/play.jpg) center / cover no-repeat; }
+  /* tour mode: the remote's OK key lights up as each step goes by */
+  #tour .nav b { display: inline-block; transition: transform .15s, background .15s; border-radius: 8px; padding: 2px 6px; margin-left: -6px; }
+  #tour .nav b.press { transform: scale(1.25); background: var(--cyan); color: #fff; }
+  #tour .spot { transition: left .35s, top .35s, width .35s, height .35s; }
+</style>
+</head>
+<body>
+<!-- What the TV shows during a real touchdown: D'Andre Swift's 5-yard run, Bears at Seahawks, Monday night.
+     The page runs as a loop on fantasytvapp.com (in the hero): his card and your scores count up as he scores. -->
+<div id="stage">
+  <div id="lower">
+    <div id="atTag">AUTOTUNE <b>ON</b><span class="k">▲</span></div>
+    <div id="bug"><div class="in rzbeat">
+      <div class="drive rz" style="--team:#0b162a"><i style="width:100%"></i><b style="left:95%"></b></div>
+      <div class="t" style="--team:#0b162a"><img src="https://a.espncdn.com/i/teamlogos/nfl/500-dark/chi.png" alt="CHI"><span class="tr"><small>5-2</small><span class="tos"><i class="on"></i><i class="on"></i><i class="on"></i></span></span></div>
+      <div class="s poss" data-n="chi"></div>
+      <div class="c clk"><span class="c q cap">4TH</span><span class="tm">8:28</span></div>
+      <div class="c dd cap rz" id="down">1st &amp; Goal · SEA 5</div>
+      <div class="s">17</div>
+      <div class="t home" style="--team:#002244"><img src="https://a.espncdn.com/i/teamlogos/nfl/500-dark/sea.png" alt="SEA"><span class="tr"><small>4-3</small><span class="tos"><i class="on"></i><i class="on"></i><i class="on"></i></span></span></div>
+    </div></div>
+    <div id="rail" class="full" style="--flash:#c83803"><div class="cards" style="display:flex">
+      <div class="card lead" id="swift">
+        <img class="hs" src="https://a.espncdn.com/i/headshots/nfl/players/full/4259545.png" alt="">
+        <div class="nm"><svg viewBox="0 0 24 24" width="18" height="18"><path d="M12 21s-7.5-4.6-9.6-9.2C.9 8.4 3 4.5 6.7 4.5c2.1 0 3.6 1.2 5.3 3.2 1.7-2 3.2-3.2 5.3-3.2 3.7 0 5.8 3.9 4.3 7.3C19.5 16.4 12 21 12 21z" fill="none" stroke="currentColor" stroke-width="1.8"></path></svg>D. Swift <span class="pos">RB</span></div>
+        <div class="st rz">● Red zone</div>
+        <div class="p"><b><span data-n="swift"></span></b><small>13.4 proj</small></div>
+        <div class="ln" data-n="swiftLine"></div></div>
+      <div class="card">
+        <img class="hs" src="https://a.espncdn.com/i/headshots/nfl/players/full/4431611.png" alt="">
+        <div class="nm">C. Williams <span class="pos">QB</span></div>
+        <div class="st on">● On field</div>
+        <div class="p"><b><span>14.6</span></b><small>18.9 proj</small></div>
+        <div class="ln">20/29 · 214 YD · 1 TD</div></div>
+      <div class="card">
+        <span class="fire corner">🔥</span>
+        <img class="hs" src="https://a.espncdn.com/i/headshots/nfl/players/full/4430878.png" alt="">
+        <div class="nm">J. Smith-Njigba <span class="pos">WR</span></div>
+        <div class="st">● Off field</div>
+        <div class="p"><b><span>23.8</span></b><small>15.1 proj</small></div>
+        <div class="ln">6/11 REC · 118 YD · 1 TD</div></div>
+      <div class="card">
+        <img class="hs" src="https://a.espncdn.com/i/headshots/nfl/players/full/4723086.png" alt="">
+        <div class="nm">C. Loveland <span class="pos">TE</span></div>
+        <div class="st on">● On field</div>
+        <div class="p"><b><span>9.8</span></b><small>8.7 proj</small></div>
+        <div class="ln">5/7 REC · 48 YD</div></div>
+    </div><div class="fill"></div>
+      <div class="mu" id="mu"><div class="pg">
+        <div><div class="lg">SUNDAY FUNDAY<b class="wp" data-n="wpA"></b></div>
+          <div class="ln"><span class="a">Swift Justice</span><span class="s" data-n="meA"></span><span class="v">vs</span>
+            <span class="s">104.1</span><span class="b">Darnold's Dynasty</span>
+            <div class="bar"><i data-w="wpA"></i></div></div></div>
+        <div><div class="lg">BACKYARD BOWL<b class="wp up" data-n="wpB"></b></div>
+          <div class="ln"><span class="a">Caleb's Kingdom</span><span class="s win" data-n="meB"></span><span class="v">vs</span>
+            <span class="s lose">95.3</span><span class="b">Seattle Slew</span>
+            <div class="bar"><i data-w="wpB"></i></div></div></div>
+      </div></div>
+    </div>
+  </div>
+
+  <div id="tdBanner" style="--team:#0b162a; --team2:#c83803"><i class="s1"></i><i class="s2"></i><div class="in">
+    <img src="https://a.espncdn.com/i/headshots/nfl/players/full/4259545.png" alt="">
+    <div class="tx"><b>TOUCHDOWN</b><span>D. Swift <em>+6.5</em></span></div></div></div>
+  <div id="radar"><header><span class="mk"></span>ALL GAMES<span class="n">4 LIVE</span></header><div class="list"></div>
+    <footer><div class="qr" id="qr"></div><div class="keys"><span><b>OK</b> watch this game</span><span><b>▶</b> heart it<i class="why">AutoTune favors it in close calls</i></span><span><b>Back</b> close</span><span class="pair">Scan: your phone is the remote</span></div></footer></div>
+  <div id="pops"></div>
+  <div id="tour"><i class="spot"></i><div class="tcard"><div class="top"><span class="key"></span><span class="n"></span></div><h3></h3><p></p>
+    <div class="nav"><span></span><span><b>Back</b> skip the tour</span></div></div></div>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script>
+// The stage is the TV's 1920×1080 screen, scaled to this frame.
+const stage = document.getElementById('stage');
+const fit = () => { stage.style.transform = `scale(${innerWidth / 1920})`; };
+addEventListener('resize', fit); fit();
+
+// Before and after the touchdown (5-yard run: 0.5 + 6 points).
+const BEFORE = { swift: 11.2, chi: 20, meA: 98.4, wpA: 41, meB: 112.6, wpB: 83, swiftLine: '21-52 RUSH · 1 TD' };
+const AFTER = { swift: 17.7, chi: 26, meA: 104.9, wpA: 58, meB: 119.1, wpB: 89, swiftLine: '22-57 RUSH · 2 TD' };
+const $$ = s => document.querySelectorAll(s);
+const pts = (k, v) => k === 'chi' ? String(Math.round(v)) : k.startsWith('wp') ? `${Math.round(v)}% WIN` : v.toFixed(1);
+function show(v) {
+  for (const el of $$('[data-n]')) { const k = el.dataset.n; el.textContent = typeof v[k] === 'number' ? pts(k, v[k]) : v[k]; }
+  for (const el of $$('[data-w]')) el.style.width = v[el.dataset.w] + '%';
+  const a = document.querySelector('[data-n="wpA"]');
+  a.className = 'wp ' + (v.wpA >= 50 ? 'up' : 'down');
+  document.querySelector('[data-n="meA"]').className = 's ' + (v.meA > 104.1 ? 'win' : 'lose');
+}
+// Numbers roll from one value to the next, like the TV's.
+function roll(ms) {
+  const t0 = performance.now();
+  return new Promise(done => {
+    const step = now => {
+      const f = Math.min(1, (now - t0) / ms), e = 1 - Math.pow(1 - f, 3), v = {};
+      for (const k in BEFORE) v[k] = typeof BEFORE[k] === 'number' ? BEFORE[k] + (AFTER[k] - BEFORE[k]) * e : (f < .5 ? BEFORE[k] : AFTER[k]);
+      show(v);
+      f < 1 ? requestAnimationFrame(step) : done();
+    };
+    requestAnimationFrame(step);
+  });
+}
+const wait = ms => new Promise(r => setTimeout(r, ms));
+const restart = (el, cls) => { el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls); };
+
+// Another game's big play slides in on the right: OK on the remote would switch to it.
+function pop(html, color) {
+  const el = document.createElement('div');
+  el.className = 'pop'; el.style.setProperty('--team', color); el.innerHTML = html;
+  document.getElementById('pops').prepend(el); void el.offsetWidth; el.classList.add('on');
+  setTimeout(() => { el.classList.remove('on'); setTimeout(() => el.remove(), 500); }, 5200);
+}
+
+async function loop() {
+  const rail = document.getElementById('rail'), swift = document.getElementById('swift'), bug = document.querySelector('#bug .in'),
+    down = document.getElementById('down'), td = document.getElementById('tdBanner');
+  for (;;) {
+    show(BEFORE);
+    swift.classList.remove('td'); rail.classList.remove('td'); td.classList.remove('on');
+    bug.classList.add('rzbeat'); down.className = 'c dd cap rz'; down.textContent = '1st & Goal · SEA 5';
+    await wait(2600);
+    // Touchdown: the banner, the bar flashes in Bears colours, his card lights up and everything counts up.
+    restart(td, 'on'); restart(rail, 'td'); swift.classList.add('td');
+    bug.classList.remove('rzbeat'); down.className = 'c dd cap gold'; down.textContent = 'TOUCHDOWN';
+    await roll(1600);
+    await wait(2400);
+    pop('<b class="pts">+4.1</b><span class="who">J. Jacobs <em>· 22-yd run</em></span><span class="ok">OK · WATCH</span>', '#203731');
+    await wait(2800);
+    td.classList.remove('on');
+    await wait(3200);
+  }
+}
+// ---- Tour mode (demo/?tour): the TV's first-launch remote tour, stepping on its own as if you pressed OK.
+// The steps are copied from TOUR in web/js/tv.js: keep them in step.
+const TOUR = [
+  { title: 'Welcome to FantasyTV', text: 'A quick tour of your remote. Press OK for the next tip, or Back to skip the tour.' },
+  { key: '▲', target: '#atTag', title: 'Up: AutoTune on / off',
+    text: 'AutoTune switches to the game that matters most to your lineup. Press Up to stay where you are; Up again turns it back on. Before a switch, a 5 second countdown shows: OK or Back cancels it.' },
+  { key: '▼', target: '#radar', radar: true, right: true, title: 'Down: every game',
+    text: 'All the live games, yours first. Up and Down move, OK watches a game, ▶ hearts it (AutoTune favors hearted games in close calls), Back closes the list. A game you pick stays on for 45 seconds (less if it goes to a commercial), then AutoTune takes over again. To stay on it, turn AutoTune off with Up.' },
+  { key: '◀ ▶', target: '#bug .in', title: 'Left: rewind · Right: live',
+    text: 'Left jumps back 10 seconds in the game you\'re watching (again for more, up to a minute). Right goes back to live. Only the game on screen can be rewound: FantasyTV keeps its last minute from when you tuned in.' },
+  { key: 'OK', target: '#pops .demo', demo: 1, title: 'OK on a popup',
+    text: 'When your players score in another game, a popup slides in: OK takes you to that game, live (other games can\'t be rewound). A touchdown in the game you\'re watching gets its moment on screen.' },
+  { key: '▲ ▼', target: '#pops .demo', demo: 3, title: 'Several popups? Pick one',
+    text: 'With more than one up, Up and Down move the white outline. OK acts on the outlined one.' },
+  { target: '#rail', title: 'Your players and matchups',
+    text: 'A card glows when your starter scores, and a touchdown pops his photo out. On the right: each league\'s score and your chance to win.' },
+  { key: '📱', qr: true, title: 'Your phone is the remote',
+    text: 'Scan this code with your phone: settings, the channel for each game, rewind and more. It\'s also at the bottom of the game list (Down). Enjoy the games!' },
+];
+const HEART = on => `<svg viewBox="0 0 24 24" width="18" height="18"><path d="M12 21s-7.5-4.6-9.6-9.2C.9 8.4 3 4.5 6.7 4.5c2.1 0 3.6 1.2 5.3 3.2 1.7-2 3.2-3.2 5.3-3.2 3.7 0 5.8 3.9 4.3 7.3C19.5 16.4 12 21 12 21z" fill="${on ? '#ff4d57' : 'none'}" stroke="${on ? '#ff4d57' : 'currentColor'}" stroke-width="1.8"/></svg>`;
+const bars = n => `<span class="bars s${n}"><i></i><i></i><i></i><i></i><i></i></span>`;
+// The game list, as the TV draws it: the game on screen first, then the rest of your games.
+const RADAR = [
+  { cls: 'cur focus', sig: 5, a: 'CHI', sc: '20–17', h: 'SEA', fav: true, sub: 'Q4 8:28 · 1st &amp; Goal at SEA 5<span class="tag red">Red zone · CHI</span>',
+    pl: [['D. Swift', 'RB', 'rz', 'Red zone', '11.2'], ['C. Williams', 'QB', 'on', 'On field', '14.6']], ch: 'ESPN HD' },
+  { cls: '', sig: 3, a: 'GB', sc: '17–10', h: 'CAR', sub: 'Q3 2:41 · 2nd &amp; 6 at CAR 38', pl: [['J. Jacobs', 'RB', 'on', 'On field', '19.3']], ch: 'FOX 5' },
+  { cls: '', sig: 2, a: 'BAL', sc: '21–14', h: 'BUF', sub: 'Q3 9:02 · 1st &amp; 10 at BAL 25', pl: [['Z. Flowers', 'WR', 'muted', 'Off field', '8.4']], ch: 'CBS 11' },
+  { cls: '', sig: 2, a: 'ATL', sc: '10–13', h: 'TB', sub: 'Halftime', pl: [['B. Robinson', 'RB', 'muted', 'Off field', '12.7']], ch: 'FOX 2' },
+];
+function drawRadar() {
+  document.querySelector('#radar .list').innerHTML = RADAR.map(g => `<div class="rg ${g.cls}">
+    <div class="top">${bars(g.sig)}<span>${g.a}</span><span class="sc">${g.sc}</span><span>${g.h}</span>${HEART(g.fav)}</div>
+    <div class="sub">${g.sub}</div>
+    ${g.pl.map(([n, pos, c, st, p]) => `<div class="pl"><span>${n} <span class="muted">${pos}</span></span><span><span class="${c}">${st}</span> ${p}</span></div>`).join('')}
+    <div class="ch">▶ ${g.ch}</div></div>`).join('');
+  if (window.QRCode) new QRCode(document.getElementById('qr'), { text: 'https://fantasytvapp.com/remote', width: 180, height: 180, colorDark: '#000', colorLight: '#fff' });
+}
+function showStep(i) {
+  const s = TOUR[i], t = document.getElementById('tour'), card = t.querySelector('.tcard');
+  for (const d of document.querySelectorAll('#pops .demo')) d.remove();
+  document.getElementById('radar').classList.toggle('on', !!s.radar);
+  t.querySelector('.key').textContent = s.key || '';
+  t.querySelector('.n').textContent = `${i + 1} / ${TOUR.length}`;
+  t.querySelector('h3').textContent = s.title;
+  t.querySelector('p').textContent = s.text;
+  t.querySelector('.nav span').innerHTML = `<b>OK</b> ${i === TOUR.length - 1 ? 'done' : 'next'}`;
+  card.classList.toggle('right', !!s.right);
+  // The page around this one shows the step in readable type on phones, where the TV's card is tiny.
+  if (parent !== window) parent.postMessage({ ftvTour: { n: `${i + 1} / ${TOUR.length}`, key: s.key || '', title: s.title, text: s.text } }, '*');
+  const old = card.querySelector('.tqr'); if (old) old.remove();
+  const qr = s.qr && document.querySelector('#qr canvas, #qr img');
+  if (qr) card.querySelector('p').insertAdjacentHTML('afterend', `<div class="tqr"><img src="${qr.tagName === 'CANVAS' ? qr.toDataURL() : qr.src}" alt=""><span>Scan with your phone camera (same Wi-Fi)</span></div>`);
+  const samples = [['TD +6.8', 'Your WR', '12-yd catch, TOUCHDOWN', 'OK · WATCH'], ['+1.4', 'Your RB', '9-yd run'], ['+0.6', 'Your QB', '14-yd pass']];
+  for (let j = (s.demo || 0) - 1; j >= 0; j--) {
+    const [p, who, what, ok] = samples[j], el = document.createElement('div');
+    el.className = `pop on demo ${j === 0 ? 'target' : ''}`;
+    el.style.setProperty('--team', 'var(--cyan)');
+    el.innerHTML = `<b class="pts">${p}</b><span class="who">${who} <em>· ${what}</em></span>${j === 0 ? `<span class="ok">${ok}</span>` : ''}`;
+    document.getElementById('pops').prepend(el);
+  }
+  setTimeout(() => {
+    const rs = s.target ? [...document.querySelectorAll(s.target)].map(e => e.getBoundingClientRect()).filter(b => b.width && b.height) : [];
+    const spot = t.querySelector('.spot');
+    t.classList.toggle('spotted', rs.length > 0); t.classList.toggle('nospot', !rs.length);
+    if (!rs.length) return;
+    const st = stage.getBoundingClientRect(), k = st.width / 1920, pad = 10;
+    const l = Math.min(...rs.map(b => b.left)), tp = Math.min(...rs.map(b => b.top)), r = Math.max(...rs.map(b => b.right)), bt = Math.max(...rs.map(b => b.bottom));
+    Object.assign(spot.style, { left: `${(l - st.left) / k - pad}px`, top: `${(tp - st.top) / k - pad}px`, width: `${(r - l) / k + pad * 2}px`, height: `${(bt - tp) / k + pad * 2}px` });
+  }, s.radar ? 450 : 30);
+}
+async function tourLoop() {
+  show(BEFORE); drawRadar();
+  const t = document.getElementById('tour'), ok = () => t.querySelector('.nav b');
+  for (;;) {
+    t.classList.add('on');
+    for (let i = 0; i < TOUR.length; i++) {
+      showStep(i);
+      await wait(2600 + TOUR[i].text.length * 28);   // time to read it
+      ok().classList.add('press'); await wait(350); ok().classList.remove('press');   // "OK" is pressed
+    }
+    t.classList.remove('on'); document.getElementById('radar').classList.remove('on');
+    for (const d of document.querySelectorAll('#pops .demo')) d.remove();
+    await wait(2500);
+  }
+}
+
+if (location.search.includes('tour')) {
+  document.documentElement.classList.add('tourmode');
+  tourLoop();
+} else if (matchMedia('(prefers-reduced-motion: reduce)').matches) {
+  // No animation: just after the touchdown.
+  show(AFTER); document.getElementById('swift').classList.add('td');
+  document.querySelector('#bug .in').classList.remove('rzbeat');
+  const down = document.getElementById('down'); down.className = 'c dd cap gold'; down.textContent = 'TOUCHDOWN';
+} else loop();
+</script>
+</body>
+</html>

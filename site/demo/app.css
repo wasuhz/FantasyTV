@@ -1,0 +1,41 @@
+:root {
+  /* FantasyTV brand, from the logo: navy #021E42, red #E8202E, white. Sports-broadcast type: Saira Condensed
+     (scores, points, labels; italic for the big numbers) and Barlow (names, text). --cyan is the accent (red). */
+  --bg: #01142e;
+  --panel: #021e42;
+  --panel-2: #06295a;
+  --line: #123d73;
+  --text: #f3f6fb;
+  --muted: #a3b4cd;
+  --dim: #6c82a3;
+  --cyan: #e8202e;
+  --cyan-dim: #8c1a24;
+  --tint: #2a1631;     /* the accent, faint, behind selected things */
+  --lime: #5fe08c;     /* on the field, winning, OK */
+  --amber: #ffc53d;    /* countdowns, breaks, "switching to" */
+  --red: #ff4d57;      /* red zone, losing */
+  --green: #5fe08c;
+  --mono: 'Saira Condensed', 'Arial Narrow', sans-serif;
+  --sans: 'Barlow', system-ui, sans-serif;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font-family: var(--sans); }
+button { font: inherit; color: inherit; }
+.mono { font-family: var(--mono); }
+.muted { color: var(--muted); }
+.tag { display: inline-block; font: 600 11px/1 var(--mono); letter-spacing: .06em; text-transform: uppercase; padding: 4px 6px; border-radius: 3px; }
+.tag.red { background: var(--red); color: #fff; }
+.tag.cyan { background: var(--cyan); color: #fff; }
+.tag.amber { border: 1px solid var(--amber); color: var(--amber); }
+.tag.ghost { border: 1px solid var(--line); color: var(--muted); }
+
+/* signal bars: how much a game matters right now */
+.bars { display: inline-flex; gap: 2px; align-items: flex-end; height: 14px; }
+.bars i { width: 4px; background: #1b4a85; border-radius: 1px; }
+.bars i:nth-child(1) { height: 30%; } .bars i:nth-child(2) { height: 48%; } .bars i:nth-child(3) { height: 66%; }
+.bars i:nth-child(4) { height: 84%; } .bars i:nth-child(5) { height: 100%; }
+.bars.s1 i:nth-child(-n+1), .bars.s2 i:nth-child(-n+2), .bars.s3 i:nth-child(-n+3),
+.bars.s4 i:nth-child(-n+4), .bars.s5 i:nth-child(-n+5) { background: var(--red); }
+
+.logo-mark { width: 32px; height: 32px; flex: none; border-radius: 7px; display: block; }

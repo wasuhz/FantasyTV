@@ -1,0 +1,91 @@
+/* fantasytvapp.com: the broadcast look of the app (navy, red segment tags, italic condensed headings). */
+:root {
+  --bg: #01142e; --panel: #04203f; --ink: #eef2f9; --muted: #9fb0ca; --line: #16365f; --navy: #000c1d;
+  --red: #ff3b47; --red-ink: #ff6b74; --chip: #0b2c52; --lime: #b6f03c;
+  --display: 'Saira Condensed', 'Arial Narrow', sans-serif;
+  --body: 'Barlow', system-ui, sans-serif;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 400 17px/1.55 var(--body); }
+a { color: var(--red-ink); }
+img { max-width: 100%; height: auto; display: block; }
+.wrap { max-width: 1080px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+
+nav { background: var(--navy); border-bottom: 1px solid var(--line); }
+nav .wrap { display: flex; align-items: center; gap: 16px; padding-block: 12px; }
+nav .logo img { height: 30px; width: auto; }
+nav .links { margin-left: auto; display: flex; gap: 18px; font: 700 15px/1 var(--display); letter-spacing: .08em; text-transform: uppercase; }
+nav .links a { color: var(--muted); text-decoration: none; }
+nav .links a:hover { color: var(--ink); }
+
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 48px; padding: 12px 22px; border-radius: 10px;
+  font: italic 800 20px/1 var(--display); letter-spacing: .02em; text-decoration: none; border: 1px solid var(--line); color: var(--ink); background: var(--panel); cursor: pointer; }
+.btn.primary { background: var(--red); border-color: var(--red); color: #fff; }
+.btn:focus-visible { outline: 3px solid var(--lime); outline-offset: 2px; }
+
+header.hero { background: var(--navy); }
+header.hero .wrap { padding-block: 44px 40px; display: grid; gap: 16px; }
+.kicker { font: 700 14px/1 var(--display); letter-spacing: .18em; text-transform: uppercase; color: var(--red-ink); }
+.works { list-style: none; margin: -4px 0 6px; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+.works li { display: inline-flex; align-items: center; gap: 10px; background: var(--chip); border: 1px solid var(--line); border-radius: 999px;
+  padding: 5px 14px 5px 5px; font: 500 16px/1.2 var(--body); color: var(--ink); }
+.works b { font: 700 13px/1 var(--display); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); background: var(--navy);
+  border-radius: 999px; padding: 6px 10px; }
+.works i { color: var(--muted); }
+h1 { margin: 0; font: italic 800 clamp(42px, 8vw, 76px)/.95 var(--display); letter-spacing: .01em; text-wrap: balance; }
+h1 span { color: var(--red); }
+/* "YOUR": red caps over a hand-drawn play route, like the logo's, that draws itself in */
+h1 .you { position: relative; display: inline-block; text-transform: uppercase; padding-right: .06em; }
+h1 .you svg { position: absolute; left: -2%; width: 104%; top: 86%; overflow: visible; fill: none; stroke: #fff; stroke-width: 5; stroke-linecap: round; stroke-linejoin: round; }
+h1 .you svg * { stroke-dasharray: 220; stroke-dashoffset: 220; animation: route 1s .35s cubic-bezier(.6,0,.3,1) forwards; }
+h1 .you svg path + path { animation-delay: 1.15s; animation-duration: .3s; }
+@keyframes route { to { stroke-dashoffset: 0; } }
+.hero h1 { margin-bottom: 14px; }
+.hero p.vs { font: italic 700 clamp(20px, 2.6vw, 26px)/1.25 var(--display); color: var(--ink); letter-spacing: .01em; }
+.hero p.vs b { color: var(--red); text-transform: uppercase; font-weight: 800; }
+.hero p { margin: 0; max-width: 62ch; color: #c6d2e5; font-size: 19px; }
+.cta { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 6px; }
+.shot { margin-top: 18px; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+figure.shot { margin-inline: 0; margin-bottom: 0; background: #000; }
+.shot iframe { display: block; width: 100%; aspect-ratio: 16 / 9; border: 0; pointer-events: none; }
+/* phones: the tour's current step under the demo, readable (filled in by the demo) */
+.tourstep { display: none; padding: 14px 16px 16px; background: var(--panel); border-top: 1px solid var(--line); }
+.tourstep .top { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+.tourstep .key { font: 800 18px/1 var(--display); background: var(--red); color: #fff; padding: 6px 10px; border-radius: 8px; }
+.tourstep .key:empty { display: none; }
+.tourstep .n { margin-left: auto; font: 700 14px/1 var(--display); color: var(--muted); letter-spacing: .08em; }
+.tourstep b { display: block; font: italic 800 22px/1.1 var(--display); }
+.tourstep p { margin: 6px 0 0; color: #c6d2e5; font-size: 16px; }
+@media (max-width: 700px) { #remote-tour .tourstep:not(:empty) { display: block; } #remote-tour figcaption { display: none; } }
+.shot figcaption { padding: 8px 14px; font-size: 14px; color: var(--muted); background: var(--panel); border-top: 1px solid var(--line); }
+
+main .wrap { padding-block: 36px 60px; display: grid; gap: 44px; }
+section { display: grid; gap: 16px; scroll-margin-top: 20px; }
+.seg { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.seg h2 { margin: 0; font: italic 800 30px/1 var(--display); background: var(--red); color: #fff; padding: 6px 18px 8px 14px;
+  clip-path: polygon(0 0, 100% 0, calc(100% - 12px) 100%, 0 100%); }
+.seg p { margin: 0; color: var(--muted); font-size: 16px; flex: 1 1 260px; min-width: 0; }
+.grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); gap: 12px; }
+.grid li, .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; display: grid; gap: 6px; align-content: start; min-width: 0; }
+.grid b, .card b { font: 700 21px/1.2 var(--display); }
+.grid span, .card span { color: var(--muted); font-size: 16px; }
+ol.steps { margin: 0; padding: 0; list-style: none; counter-reset: s; display: grid; gap: 12px; }
+ol.steps li { counter-increment: s; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px 16px 64px; position: relative; }
+ol.steps li::before { content: counter(s); position: absolute; left: 16px; top: 14px; width: 34px; height: 34px; border-radius: 50%; background: var(--red); color: #fff;
+  font: italic 800 20px/34px var(--display); text-align: center; }
+ol.steps b { font: 700 20px/1.2 var(--display); display: block; margin-bottom: 2px; }
+ol.steps span { color: var(--muted); }
+.code { font: italic 800 30px/1 var(--display); color: var(--lime); letter-spacing: .04em; }
+details { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px 18px; }
+details summary { font: 700 20px/1.3 var(--display); cursor: pointer; }
+details p { margin: 10px 0 0; color: var(--muted); }
+footer { border-top: 1px solid var(--line); }
+footer .wrap { padding-block: 22px 40px; color: var(--muted); font-size: 15px; display: flex; flex-wrap: wrap; gap: 8px 22px; }
+.prose { max-width: 70ch; display: grid; gap: 14px; }
+.prose h2 { margin: 12px 0 0; font: italic 800 26px/1.1 var(--display); }
+.prose p, .prose li { color: #c6d2e5; }
+@media (min-width: 900px) { nav .wrap { padding-block: 16px; } nav .logo img { height: 60px; } nav .links { gap: 26px; font-size: 17px; } }
+@media (max-width: 560px) { nav .links { gap: 12px; font-size: 13px; } nav .links .hide-sm { display: none; } }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } h1 .you svg * { stroke-dashoffset: 0; } }
