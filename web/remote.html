@@ -663,6 +663,8 @@ for (const b of form.querySelectorAll('.eye[data-for], #eye')) b.onclick = e => 
 };
 
 // Yahoo: the TV holds the sign-in (TvServer → Yahoo.java). Not available in the PC test version.
+// Off until Yahoo approves FantasyTV's app for its Fantasy API (until then every Fantasy call answers 403). Turn on then.
+const YAHOO_LIVE = false;
 const $id = id => document.getElementById(id);
 function yShow(ok, title, lines = []) {
   $id('yState').className = `result ${ok ? 'ok' : ok === false ? 'bad' : ''}`;
@@ -688,6 +690,11 @@ async function yRefresh() {
     $id('yOwn').open = !s.builtIn;
     $id('ySetup').hidden = s.connected;
     $id('yOff').hidden = !s.connected;
+    if (!YAHOO_LIVE && !s.connected) {
+      $id('ySetup').hidden = true;
+      yShow(null, 'Coming soon', ['Yahoo is waiting on Yahoo\'s approval for FantasyTV.', 'Until then, add your Yahoo players under Tracked players above.']);
+      return;
+    }
     if (!s.connected) { yShow(null, 'Not connected', ['Your Yahoo team joins your Sleeper teams once connected.']); return; }
     yShow(true, 'Yahoo connected', yTeams(await yApi('roster')));
   } catch (e) { yShow(false, 'Yahoo', [e.message]); }
