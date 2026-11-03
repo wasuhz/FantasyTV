@@ -33,7 +33,7 @@ export const link = {
 };
 
 export function loadSettings() {
-  const d = { sleeper: '', mode: 'live', delay: 30, cooldown: 75, iptvBase: '', xtServer: '', xtUser: '', xtPass: '' };
+  const d = { sleeper: '', mode: 'live', delay: 30, cooldown: 75, iptvBase: '', xtServer: '', xtUser: '', xtPass: '', stalkerPortal: '', stalkerMac: '' };
   try { return Object.assign(d, JSON.parse(localStorage.getItem('ftv.settings') || '{}')); } catch { return d; }
 }
 

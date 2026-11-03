@@ -6,27 +6,35 @@
 const GUIDE_AGE = 10 * 60e3;
 
 export class Iptv {
-  /** cfg: {base} for Dispatcharr on your network, or {server, user, pass} for an Xtream Codes login. */
+  /**
+   * cfg: {base} for Dispatcharr on your network, {server, user, pass} for an Xtream Codes login, or {stalker} for a
+   * Stalker portal (the app logs in with its address and MAC, and serves its channels and guide at /stalker/).
+   */
   constructor(cfg) {
     this.cfg = cfg;
     this.guide = null;      // {at, now: Map(channelId -> text on the air)}
     this.list = null;       // {at, channels: [{id, name, group, no, url}]}
   }
 
+  /** Settings' "Play from" picks one; Automatic takes Dispatcharr, then Xtream, then Stalker, whichever is filled in. */
   static fromSettings(s) {
-    if (s.iptvBase) return new Iptv({ base: s.iptvBase.replace(/\/+$/, '') });
-    if (s.xtServer && s.xtUser) return new Iptv({ server: s.xtServer.replace(/\/+$/, ''), user: s.xtUser, pass: s.xtPass || '' });
-    return null;
+    const all = {
+      dispatcharr: s.iptvBase && (() => new Iptv({ base: s.iptvBase.replace(/\/+$/, '') })),
+      xtream: s.xtServer && s.xtUser && (() => new Iptv({ server: s.xtServer.replace(/\/+$/, ''), user: s.xtUser, pass: s.xtPass || '' })),
+      stalker: s.stalkerPortal && s.stalkerMac && (() => new Iptv({ stalker: true })),
+    };
+    const make = all[s.iptvSource] || all.dispatcharr || all.xtream || all.stalker;
+    return make ? make() : null;
   }
 
   get guideUrl() {
     const c = this.cfg;
-    return c.base ? `${c.base}/output/epg?days=1` : `${c.server}/xmltv.php?username=${enc(c.user)}&password=${enc(c.pass)}`;
+    return c.stalker ? '/stalker/epg' : c.base ? `${c.base}/output/epg?days=1` : `${c.server}/xmltv.php?username=${enc(c.user)}&password=${enc(c.pass)}`;
   }
 
   get listUrl() {
     const c = this.cfg;
-    return c.base ? `${c.base}/output/m3u` : `${c.server}/get.php?username=${enc(c.user)}&password=${enc(c.pass)}&type=m3u_plus&output=ts`;
+    return c.stalker ? '/stalker/m3u' : c.base ? `${c.base}/output/m3u` : `${c.server}/get.php?username=${enc(c.user)}&password=${enc(c.pass)}&type=m3u_plus&output=ts`;
   }
 
   /**
@@ -110,7 +118,7 @@ function matcher(game) {
 export const proxied = url => `/proxy?url=${enc(url)}`;
 
 async function text(url) {
-  const r = await fetch(proxied(url));
+  const r = await fetch(url.startsWith('/') ? url : proxied(url));   // the app's own (Stalker) or through its proxy
   if (!r.ok) throw new Error(`IPTV ${r.status}`);
   return r.text();
 }

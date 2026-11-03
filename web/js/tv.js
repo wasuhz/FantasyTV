@@ -1217,11 +1217,20 @@ function redZoneHours(now = new Date()) {
 }
 function redZoneChannel() {
   const chans = iptv && iptv.list ? iptv.list.channels : [];
-  return chans.find(c => /^nfl\s*red\s?zone$/i.test(c.name.trim())) || chans.find(c => /red\s?zone/i.test(c.name)) || null;
+  return chans.find(c => /^nfl\s*red\s?zone$/i.test((c.name || '').trim())) || chans.find(c => /red\s?zone/i.test(c.name || '')) || null;
 }
-const redZoneRow = () => (redZoneHours() || params.has('redzone')) && redZoneChannel() ? { redzone: true, id: 'redzone' } : null;
-function watchRedZone() {
-  const ch = redZoneChannel();
+// The button shows whenever a RedZone channel is likely: in RedZone hours (or forced), with an IPTV set up. The channel
+// list loads on demand when tapped, so this doesn't depend on game-hunting having run.
+const redZoneRow = () => (redZoneHours() || params.has('redzone')) && iptv ? { redzone: true, id: 'redzone' } : null;
+async function watchRedZone() {
+  if (!iptv) { toast('No IPTV set up'); return; }
+  let ch = redZoneChannel();
+  if (!ch) {                         // list not loaded yet (e.g. no game hunted since start): pull it now
+    toast('Finding NFL RedZone…');
+    try { await iptv.refresh(); } catch (e) { toast('Could not reach your IPTV'); console.log('redzone refresh failed', e.message); return; }
+    ch = redZoneChannel();
+  }
+  console.log('redzone channel:', ch ? ch.name : 'none', 'of', iptv.list ? iptv.list.channels.length : 0, 'channels');
   if (!ch) { toast('No RedZone channel on your IPTV'); return; }
   if (!redZone) redZone = { wasPaused: auto.paused };
   auto.setPaused(true);

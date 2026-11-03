@@ -162,6 +162,9 @@ final class TvServer {
                 case "/yahoo/done":   // back from Yahoo through the return page: finish the sign-in here, then the remote
                     yahooDone(out, query);
                     break;
+                case "/stalker/m3u": case "/stalker/epg": case "/stalker/play": case "/stalker/test":
+                    stalker(out, path, query);
+                    break;
                 case "/api/bugs": {   // the saved score-bug samples (Settings: save score-bug samples), newest last
                     File[] all = new File(context.getFilesDir(), "bugs").listFiles();
                     StringBuilder j = new StringBuilder("[");
@@ -348,6 +351,85 @@ final class TvServer {
         String type = ext.equals("html") ? "text/html; charset=utf-8" : ext.equals("js") ? "text/javascript; charset=utf-8"
                 : ext.equals("css") ? "text/css; charset=utf-8" : ext.equals("svg") ? "image/svg+xml" : ext.equals("png") ? "image/png" : "application/octet-stream";
         send(out, 200, type, data);
+    }
+
+    /**
+     * A Stalker portal (Settings: portal address and MAC), in the shapes the page reads from any IPTV: /stalker/m3u (the
+     * channels, each played through /stalker/play), /stalker/epg (the guide). /stalker/play?cmd= asks the portal for a
+     * fresh link and sends the player there. /stalker/test?portal=&mac= tries what's typed in Settings, saved or not.
+     */
+    private void stalker(OutputStream out, String path, String query) throws IOException {
+        java.util.Map<String, String> q = new java.util.HashMap<>();
+        for (String p : query.split("&")) {
+            int eq = p.indexOf('=');
+            if (eq > 0) q.put(p.substring(0, eq), URLDecoder.decode(p.substring(eq + 1), "UTF-8"));
+        }
+        try {
+            String portal = q.get("portal"), mac = q.get("mac");
+            if (portal == null) {
+                org.json.JSONObject c = new org.json.JSONObject(config.exists() ? new String(Files.readAllBytes(config.toPath()), StandardCharsets.UTF_8) : "{}");
+                portal = c.optString("stalkerPortal");
+                mac = c.optString("stalkerMac");
+            }
+            Stalker s = Stalker.of(portal, mac);
+            switch (path) {
+                case "/stalker/m3u":
+                    send(out, 200, "audio/x-mpegurl; charset=utf-8", s.m3u("http://127.0.0.1:" + PORT).getBytes(StandardCharsets.UTF_8));
+                    break;
+                case "/stalker/epg":
+                    send(out, 200, "application/xml; charset=utf-8", s.epg().getBytes(StandardCharsets.UTF_8));
+                    break;
+                case "/stalker/play": {
+                    String to = s.link(q.containsKey("cmd") ? q.get("cmd") : "");
+                    if (to.contains(".m3u8")) {   // HLS: its pieces are fetched by address, so the player goes there itself
+                        String h = "HTTP/1.1 302 Found\r\nLocation: " + to + "\r\nCache-Control: no-store\r\nConnection: close\r\nContent-Length: 0\r\n\r\n";
+                        out.write(h.getBytes(StandardCharsets.ISO_8859_1));
+                        out.flush();
+                        break;
+                    }
+                    // A live TS stream: opened as a MAG box and relayed as it arrives, until the player hangs up.
+                    java.net.Socket up = s.open(to);
+                    out.write(("HTTP/1.1 200 OK\r\nContent-Type: video/mp2t\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n").getBytes(StandardCharsets.ISO_8859_1));
+                    try (java.net.Socket sock = up; InputStream in = sock.getInputStream()) {
+                        byte[] buf = new byte[188 * 350];
+                        boolean first = true;
+                        long total = 0;
+                        for (int n; (n = in.read(buf)) > 0; ) {
+                            if (first) { Log.i(TAG, "stalker stream data: " + classify(buf, n)); first = false; }
+                            total += n;
+                            out.write(buf, 0, n);
+                        }
+                        if (first) Log.i(TAG, "stalker stream data: empty (the server sent 0 bytes)");
+                        else Log.i(TAG, "stalker stream ended after " + total + " bytes");
+                    } catch (IOException gone) {
+                        // the player moved on, or the stream ended: either way, done
+                    }
+                    break;
+                }
+                default:
+                    send(out, 200, "application/json", s.test().toString().getBytes(StandardCharsets.UTF_8));
+            }
+        } catch (IOException | org.json.JSONException e) {
+            String why = e instanceof java.net.UnknownHostException ? "Server name not found"
+                    : e instanceof java.net.SocketTimeoutException ? "No answer from the portal (timed out)"
+                    : e instanceof java.net.ConnectException ? "Connection refused (wrong port, or the portal is off)" : e.getMessage();
+            send(out, 502, "text/plain; charset=utf-8", String.valueOf(why).getBytes(StandardCharsets.UTF_8));
+        }
+    }
+
+    /** What the first bytes of a "stream" really are, for the log: real video, an error page, a playlist, or junk. */
+    private static String classify(byte[] b, int n) {
+        if (n == 0) return "empty";
+        boolean ts = b[0] == 0x47 && (n < 189 || b[188] == 0x47);
+        if (ts) return "valid MPEG-TS video (" + n + " bytes) — the stream is good";
+        String head = new String(b, 0, Math.min(n, 64), StandardCharsets.ISO_8859_1).trim();
+        String low = head.toLowerCase(Locale.ROOT);
+        if (low.startsWith("#extm3u")) return "an HLS playlist, not raw video (first line: " + head.split("\n")[0] + ")";
+        if (low.startsWith("<!doctype") || low.startsWith("<html") || low.contains("<head")) return "an HTML page, probably an error (starts: " + head.replaceAll("\\s+", " ") + ")";
+        if (low.startsWith("{") || low.startsWith("[")) return "JSON, probably an error (starts: " + head + ")";
+        StringBuilder hex = new StringBuilder();
+        for (int i = 0; i < Math.min(n, 16); i++) hex.append(String.format("%02x ", b[i]));
+        return "unrecognized data — first bytes: " + hex + "| as text: " + head.replaceAll("[^\\x20-\\x7e]", ".");
     }
 
     private static void send(OutputStream out, int code, String type, byte[] body) throws IOException {

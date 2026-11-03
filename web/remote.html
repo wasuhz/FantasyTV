@@ -216,7 +216,7 @@
 </header>
 <div class="pending" id="pending"><div class="t"><small>SWITCHING TO</small><span id="pTo"></span></div><span class="s" id="pSecs"></span><button id="pCancel">CANCEL</button></div>
 <form id="settings" class="settings" hidden novalidate>
-  <div class="hero"><div class="kicker">FantasyTV · on your TV</div><h2>Settings<span>.</span></h2></div>
+  <div class="hero"><div class="kicker">FantasyTV beta · on your TV</div><h2>Settings<span>.</span></h2></div>
   <div id="guide" hidden></div>
   <div class="tabs" role="tablist">
     <button type="button" class="tab on" data-tab="general">WATCH</button>
@@ -331,10 +331,14 @@
   <div class="pane" data-pane="feeds" hidden>
     <div class="section">YOUR FEED ACCESS · IPTV</div>
     <label>Dispatcharr address<input name="iptvBase" placeholder="http://your-server:9191" inputmode="url" autocapitalize="off"></label>
-    <small>Or an Xtream Codes login (the one TiviMate uses). The TV plays from Dispatcharr when both are filled in.</small>
+    <small>Or an Xtream Codes login (the one TiviMate uses).</small>
     <label>Xtream server<input name="xtServer" inputmode="url" autocapitalize="off"></label>
     <div class="two"><label>Username<input name="xtUser" autocomplete="off" autocapitalize="off"></label>
       <label>Password<span class="pw"><input name="xtPass" type="password" autocomplete="off" autocapitalize="off"><button type="button" class="eye" id="eye" aria-label="Show password">SHOW</button></span></label></div>
+    <small>Or a Stalker portal (a MAC login, like a MAG box): the portal's address and the MAC address your provider has on file.</small>
+    <div class="two"><label>Stalker portal<input name="stalkerPortal" inputmode="url" autocapitalize="off" placeholder="http://portal:8080/c/"></label>
+      <label>MAC address<input name="stalkerMac" autocomplete="off" autocapitalize="characters" placeholder="00:1A:79:12:34:56"></label></div>
+    <label>Play from<select name="iptvSource"><option value="auto">Automatic (Dispatcharr, then Xtream, then Stalker)</option><option value="dispatcharr">Dispatcharr</option><option value="xtream">Xtream Codes</option><option value="stalker">Stalker portal</option></select></label>
     <button type="button" class="watch" id="testBtn" style="width:100%;margin:0">TEST CONNECTION</button>
     <div id="testOut" hidden></div>
     <small>Games are found on your channels by the guide (both team names) or a channel named after the game ("NFL | DAL/PHI"), NFL channels first.</small>
@@ -567,7 +571,7 @@ document.getElementById('pCancel').onclick = () => { link.send({ type: 'cancel' 
 
 // Settings live on the TV (/api/config); saving restarts the TV page with them.
 const form = document.getElementById('settings');
-const DEFAULTS = { sleeper: '', mode: 'live', delay: 30, cooldown: 75, iptvBase: '', xtServer: '', xtUser: '', xtPass: '',
+const DEFAULTS = { sleeper: '', mode: 'live', delay: 30, cooldown: 75, iptvBase: '', xtServer: '', xtUser: '', xtPass: '', stalkerPortal: '', stalkerMac: '', iptvSource: 'auto',
   hideSpoilers: true, showOpp: false, lookahead: true, pointsPopups: true, swingAlerts: true, dangerAlerts: false, injuryAlerts: true, popupTiming: 'now', popupDelay: 25, autoUpdate: true, splitScreen: true, showMatchups: true, oppWeight: 0, favTeams: '', blackout: '', skipLeagues: [], tracked: [], espnLeagues: [], bugSamples: false, perf: 'auto', tunePreset: 'balanced', alertsPreset: 'quiet', popupMin: 5, tdHere: 'full', tdAway: 'small' };
 let cfg = { ...DEFAULTS };
 document.getElementById('gear').onclick = async () => {
@@ -861,7 +865,7 @@ function drawFeeds() {
   if (!state) return;
   const r = rulesOf(), map = state.channels || {};
   const games = state.games.filter(g => g.state !== 'post');
-  document.getElementById('gameChans').innerHTML = !state.iptv ? '<small>Add your Dispatcharr or Xtream server above first.</small>'
+  document.getElementById('gameChans').innerHTML = !state.iptv ? '<small>Add your Dispatcharr, Xtream or Stalker login above first.</small>'
     : map.error ? `<small>Couldn't read your channels: ${esc(map.error)}</small>`
     : games.map(g => {
       const m = map[g.id], pick = r.games[g.id];
@@ -1051,12 +1055,14 @@ document.getElementById('testBtn').onclick = async () => {
   const f = form.elements, btn = document.getElementById('testBtn');
   const base = f.iptvBase.value.trim().replace(/\/+$/, ''), srv = f.xtServer.value.trim().replace(/\/+$/, '');
   const user = f.xtUser.value.trim(), pass = f.xtPass.value;
-  if (!base && !srv) { report(false, 'Nothing to test', ['Fill in a Dispatcharr address or an Xtream server.']); return; }
-  if (!/^https?:\/\//i.test(base || srv)) { report(false, 'Address needs http:// or https://', [base || srv]); return; }
+  const portal = f.stalkerPortal.value.trim(), mac = f.stalkerMac.value.trim();
+  if (!base && !srv && !portal) { report(false, 'Nothing to test', ['Fill in a Dispatcharr address, an Xtream server or a Stalker portal.']); return; }
+  for (const a of [base, srv, portal]) if (a && !/^https?:\/\//i.test(a)) { report(false, 'Address needs http:// or https://', [a]); return; }
   btn.disabled = true;
   btn.textContent = 'TESTING…';
   testOut.innerHTML = '';
-  const used = base ? 'Dispatcharr' : 'Xtream';
+  const chosen = { dispatcharr: base && 'Dispatcharr', xtream: srv && 'Xtream', stalker: portal && 'Stalker' }[f.iptvSource.value];
+  const used = chosen || (base ? 'Dispatcharr' : srv ? 'Xtream' : 'Stalker');   // what the TV will play from
   try {
     // Each one filled in gets tested; the TV plays from the Dispatcharr address when there is one.
     if (base) {
@@ -1067,6 +1073,18 @@ document.getElementById('testBtn').onclick = async () => {
       }
     }
     if (srv) await testXtream(srv, user, pass, used === 'Xtream');
+    // Stalker: the TV logs in to the portal itself (it needs the MAC and a box's headers), with what's typed here.
+    if (portal) {
+      try {
+        const r = await fetch(`/stalker/test?portal=${encodeURIComponent(portal)}&mac=${encodeURIComponent(mac)}`, { cache: 'no-store' });
+        if (!r.ok) throw new Error((await r.text()) || `HTTP ${r.status}`);
+        const j = await r.json();
+        report(true, `Stalker: connected${used === 'Stalker' ? ' · the TV uses this' : ''}`,
+          [`${j.channels} channels, ${j.nfl} NFL`, ...(j.sample.length ? [`e.g. ${j.sample.join(' · ')}`] : [])], true);
+      } catch (e) {
+        report(false, "Stalker: couldn't connect", [e.message, 'Check the portal address (from your provider, often ending in /c/) and the MAC address they have on file.'], true);
+      }
+    }
   } finally {
     btn.disabled = false;
     btn.textContent = 'TEST CONNECTION';
@@ -1094,15 +1112,15 @@ function drawGuide() {
   g.hidden = !s;
   if (!s) return;
   const bar = ['intro', 'server', 'teams'].map((k, i, all) => `<i class="${k === s ? 'on' : all.indexOf(s) > i ? 'done' : ''}"></i>`).join('');
-  if (s === 'intro') g.innerHTML = `<div class="steps">${bar}</div><div class="k">Welcome to FantasyTV</div>
+  if (s === 'intro') g.innerHTML = `<div class="steps">${bar}</div><div class="k">Welcome to the FantasyTV beta</div>
     <h3>Two things to set up, in this order</h3>
-    <ol><li><b>Your stream server.</b> FantasyTV doesn't come with channels: it plays the games from <b>your</b> IPTV service (an Xtream Codes login, or a Dispatcharr server).</li>
+    <ol><li><b>Your stream server.</b> FantasyTV doesn't come with channels: it plays the games from <b>your</b> IPTV service (an Xtream Codes login, a Stalker portal with its MAC address, or a Dispatcharr server).</li>
       <li><b>Your fantasy teams.</b> Sleeper or ESPN, so it knows which games matter to you.</li></ol>
     <p><small>About two minutes. Your logins stay on your TV.</small></p>
     <button type="button" class="watch go" data-guide="server">START: ADD MY SERVER</button>`;
   else if (s === 'server') g.innerHTML = `<div class="steps">${bar}</div><div class="k">Step 1 of 2</div>
     <h3>Add your stream server</h3>
-    <p>Below: your <b>Xtream server, username and password</b> (the same ones TiviMate uses), or a Dispatcharr address. Then tap <b>TEST CONNECTION</b>.</p>
+    <p>Below: your <b>Xtream server, username and password</b> (the same ones TiviMate uses), a Stalker portal and MAC address, or a Dispatcharr address. Then tap <b>TEST CONNECTION</b>.</p>
     <div class="st ${guide.server ? 'ok' : ''}">${guide.server ? '✓ Your TV reached the server.' : 'Waiting for a successful TEST CONNECTION…'}</div>
     <button type="button" class="watch go" data-guide="teams" ${guide.server ? '' : 'disabled'}>NEXT: MY FANTASY TEAMS</button>
     ${guide.server ? '' : '<button type="button" class="later" data-guide="teams">Skip for now: no games will play until a server is added</button>'}`;
@@ -1138,7 +1156,7 @@ function guideCheck(serverOk) {
     const c = await (await fetch('/api/config', { cache: 'no-store' })).json();
     if (c.sleeper || (c.espnLeagues || []).length) return;
     await document.getElementById('gear').onclick();
-    guide.server = !!(c.xtServer || c.iptvBase);
+    guide.server = !!(c.xtServer || c.iptvBase || c.stalkerPortal);
     guideTo(guide.server ? 'teams' : 'intro');
   } catch { /* TV not answering yet */ }
 })();
