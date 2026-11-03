@@ -4,7 +4,7 @@
 > please report what breaks in [Issues](https://github.com/wasuhz/FantasyTV/issues). The app installs fixes itself.
 
 **NFL RedZone, but for your own fantasy teams.** FantasyTV is an Android app, for TVs and for phones (foldables
-included), for people who watch football through IPTV (Dispatcharr or an Xtream Codes login). It follows your fantasy leagues, finds the games your players are in on
+included), for people who watch football through IPTV (Dispatcharr, an Xtream Codes login or a Stalker portal). It follows your fantasy leagues, finds the games your players are in on
 your own channels, and switches to the one most likely to score you points, with your live fantasy scores on screen.
 
 It reads ESPN's live play-by-play, which usually runs ahead of an IPTV stream, so it can switch to a game just before a
@@ -44,7 +44,7 @@ Same app and same code, **1790534**, on a TV or a phone. It's always the latest 
 
 - **Fantasy leagues:** Sleeper (username) and/or ESPN (league ID; private leagues with the `espn_s2`/`SWID` cookies).
   Up to 4 leagues at once. Yahoo is built in but waiting on Yahoo's API approval.
-- **IPTV:** your local **Dispatcharr** address (e.g. `http://192.168.x.x:9191`) or an **Xtream Codes** login. Game
+- **IPTV:** your local **Dispatcharr** address (e.g. `http://192.168.x.x:9191`), an **Xtream Codes** login, or a **Stalker** portal (portal address and MAC). Game
   channels are found from your guide and channel names (works best with Teamarr); you can pick any game's channel
   yourself on the phone.
 
@@ -85,7 +85,7 @@ only the app itself.
 | `site/` | fantasytvapp.com |
 | `web/js/engine.js` | AutoTune: ranking and switching rules |
 | `web/js/data.js` | Sleeper, ESPN (scoreboard and fantasy leagues), Yahoo merge |
-| `web/js/iptv.js` | Finding each game's channel in Dispatcharr / Xtream |
+| `web/js/iptv.js` | Finding each game's channel in Dispatcharr / Xtream / Stalker |
 | `web/js/sim.js` | Practice Sunday (simulated games) |
 | `android/app/src/main/java/...` | Player, rewind buffer, clock reading, local server, Yahoo sign-in, updater |
 | `pages/yahoo.html` | Yahoo sign-in return page (served by GitHub Pages) |

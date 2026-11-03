@@ -344,14 +344,10 @@ async function tourLoop() {
   }
 }
 
+// Always plays, whatever the device's animation setting: the loop is how the site shows what FantasyTV does.
 if (location.search.includes('tour')) {
   document.documentElement.classList.add('tourmode');
   tourLoop();
-} else if (matchMedia('(prefers-reduced-motion: reduce)').matches) {
-  // No animation: just after the touchdown.
-  show(AFTER); document.getElementById('swift').classList.add('td');
-  document.querySelector('#bug .in').classList.remove('rzbeat');
-  const down = document.getElementById('down'); down.className = 'c dd cap gold'; down.textContent = 'TOUCHDOWN';
 } else loop();
 </script>
 </body>
