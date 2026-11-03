@@ -1280,7 +1280,7 @@ function renderRadar() {
       <div class="top"><span class="tag red">LIVE</span><span>NFL RedZone</span></div>
       <div class="sub">Every touchdown from every game, till 6:45 pm CT</div>
       <div class="pl"><span class="muted">AutoTune waits while you watch it</span></div>
-      <div class="ch">▶ ${esc(redZoneChannel().name)}</div></div>`;
+      <div class="ch">${redZoneChannel() ? `▶ ${esc(redZoneChannel().name)}` : '<span class="muted">OK finds it on your channels</span>'}</div></div>`;
     const ch = (channelMap[g.id] || {}).name;
     const chan = g.state === 'in' ? `<div class="ch">${ch ? `▶ ${esc(ch)}` : '<span class="muted">Not found on your channels</span>'}</div>` : '';
     const pl = g.players.filter(p => !p.opp && !p.out).slice(0, 2).map(p => {
