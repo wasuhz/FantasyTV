@@ -35,6 +35,11 @@ import java.util.concurrent.Executors;
 final class TvServer {
     private static final String TAG = "FantasyTVServer";
     static final int PORT = 8765;
+    /**
+     * On a phone the server answers only the app itself: the phone is its own remote, and on someone else's Wi-Fi
+     * (a coffee shop's) nobody else should reach your settings and IPTV login. A TV answers the home network.
+     */
+    static volatile boolean localOnly;
 
     private final Context context;
     private final File config;
@@ -60,7 +65,7 @@ final class TvServer {
             server = new ServerSocket();
             server.setReuseAddress(true);
             try {
-                server.bind(new java.net.InetSocketAddress(PORT));
+                server.bind(localOnly ? new java.net.InetSocketAddress(java.net.InetAddress.getByAddress(new byte[] { 127, 0, 0, 1 }), PORT) : new java.net.InetSocketAddress(PORT));
                 break;
             } catch (IOException e) {
                 server.close();

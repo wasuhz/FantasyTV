@@ -9,6 +9,9 @@ const params = new URLSearchParams(location.search);
 // On the TV app, ExoPlayer plays the channel under this page (window.Android); in a browser, mpegts.js does.
 const native = window.Android || null;
 if (native) document.documentElement.classList.add('native');
+// The same app on a phone or a Fold: touch instead of a remote, and its own settings instead of pairing a phone.
+const phone = !!(native && native.isPhone && native.isPhone());
+if (phone) document.documentElement.classList.add('phone');
 const settings = loadSettings();
 // Settings saved from the phone (/api/config) win over this browser's own.
 try { Object.assign(settings, await (await fetch('/api/config', { cache: 'no-store' })).json()); } catch { /* none yet */ }
@@ -43,13 +46,59 @@ let radarOpen = false, radarFocus = 0, calloutTimer = 0, toastTimer = 0, player 
 
 // ---- stage scaling: the TV is drawn at 1920×1080 and scaled to the window
 // The TV's WebView settles its viewport after the first layout, so check again now and then.
+// A phone or an open Fold held upright: stacked instead. The game across the top, and under it, in
+// type you can read, the score bug, your players, your matchups, popups and the switching countdown.
 function fit() {
   const w = document.documentElement.clientWidth || innerWidth, h = document.documentElement.clientHeight || innerHeight;
-  const s = Math.min(w / 1920, h / 1080);
+  const stacked = phone && w / h < 1.2;   // upright (a sideways open Fold, about 4:3, keeps the TV layout)
+  document.documentElement.classList.toggle('stacked', stacked);
+  stackParts(stacked);
   const st = $('#stage');
-  st.style.transform = `scale(${s})`;
-  st.style.left = `${(w - 1920 * s) / 2}px`;
-  st.style.top = `${(h - 1080 * s) / 2}px`;
+  if (stacked) {
+    const s = w / 1920, top = safeTop(), vh = Math.round(1080 * s);
+    st.style.transform = `scale(${s})`;
+    st.style.left = '0px';
+    st.style.top = `${top}px`;
+    document.documentElement.style.setProperty('--vbottom', `${top + vh}px`);
+    const z = Math.min(1, (w - 32) / 820);   // the score bug (about 800 wide at TV size) always fits
+    $('#panel > .in').style.zoom = z;
+    $('#radar').style.zoom = Math.min(z, w / 640);   // the game list, over everything: as wide as it fits
+    videoRect([0, top, w, vh]);
+  } else {
+    if (phone) $('#radar').style.zoom = '';
+    const s = Math.min(w / 1920, h / 1080);
+    st.style.transform = `scale(${s})`;
+    st.style.left = `${(w - 1920 * s) / 2}px`;
+    st.style.top = `${(h - 1080 * s) / 2}px`;
+    videoRect(null);
+  }
+}
+// The camera cutout at the top of a phone held upright: the picture starts below it.
+function safeTop() {
+  let p = $('#safeProbe');
+  if (!p) { p = document.createElement('i'); p.id = 'safeProbe'; p.style.cssText = 'position:fixed;top:0;height:env(safe-area-inset-top);width:0;visibility:hidden'; document.body.appendChild(p); }
+  return p.offsetHeight;
+}
+// Tells the app where the picture goes (screen pixels); null: its usual place.
+let lastRect = '';
+function videoRect(r) {
+  const k = r ? r.map(v => Math.round(v * devicePixelRatio)).join(',') : '';
+  if (k === lastRect || !native || !native.videoRect) return;
+  lastRect = k;
+  const [x, y, w, h] = r ? k.split(',').map(Number) : [0, 0, 0, 0];
+  native.videoRect(x, y, w, h);
+}
+// Stacked: these move from the TV screen into the panel (the game list over everything), and back when it turns.
+const STACK = ['countdown', 'tdBanner', 'pops', 'lower'], homes = {};
+function stackParts(on) {
+  if (!phone || !$('#panel')) return;
+  for (const id of [...STACK, 'radar']) {
+    const el = document.getElementById(id);
+    if (!homes[id]) homes[id] = { parent: el.parentNode, next: el.nextSibling };
+    const want = on ? (id === 'radar' ? document.body : $('#panel > .in')) : homes[id].parent;
+    if (el.parentNode === want) continue;
+    if (on) want.appendChild(el); else want.insertBefore(el, homes[id].next);
+  }
 }
 addEventListener('resize', fit);
 addEventListener('load', fit);
@@ -65,7 +114,8 @@ document.querySelectorAll('.mk').forEach(e => e.innerHTML = LOGO);
 function setupScreen() {
   $('#splash').classList.add('gone');
   $('#setup').classList.add('on');
-  pairCode();
+  if (phone) openSettings();   // nothing to pair: the setup guide is right here
+  else pairCode();
   allowUpdatesStep();
   setInterval(async () => {
     allowUpdatesStep();
@@ -1213,11 +1263,11 @@ function renderRadar() {
   const first = Math.max(0, Math.min(radarFocus - 2, list.length - RADAR_ROWS));
   setHtml($('#radar .list'), list.slice(first, first + RADAR_ROWS).map((g, j) => {
     const i = first + j;
-    if (g.upd) return `<div class="rg ${i === radarFocus ? 'focus' : ''}">
+    if (g.upd) return `<div data-i="${i}" class="rg ${i === radarFocus ? 'focus' : ''}">
       <div class="top"><span class="tag" style="background:var(--lime);color:#04222a">NEW</span><span>Update FantasyTV</span></div>
       <div class="sub">Version ${esc(update.versionName)}${update.notes ? ` · ${esc(update.notes)}` : ''}</div>
       <div class="pl"><span class="muted">OK to install now</span></div></div>`;
-    if (g.redzone) return `<div class="rg rzrow ${redZone ? 'cur' : ''} ${i === radarFocus ? 'focus' : ''}">
+    if (g.redzone) return `<div data-i="${i}" class="rg rzrow ${redZone ? 'cur' : ''} ${i === radarFocus ? 'focus' : ''}">
       <div class="top"><span class="tag red">LIVE</span><span>NFL RedZone</span></div>
       <div class="sub">Every touchdown from every game, till 6:45 pm CT</div>
       <div class="pl"><span class="muted">AutoTune waits while you watch it</span></div>
@@ -1228,7 +1278,7 @@ function renderRadar() {
       const c = p.status === 'Red zone' ? 'rz' : p.status === 'On field' ? 'on' : 'muted';
       return `<div class="pl"><span>${esc(p.short)} <span class="muted">${p.pos}</span></span><span><span class="${c}">${esc(p.status)}</span> ${pts(p.pts)}</span></div>`;
     }).join('');
-    return `<div class="rg ${g.id === auto.current ? 'cur' : ''} ${i === radarFocus ? 'focus' : ''} ${g.state !== 'in' || g.skip ? 'dim' : ''}">
+    return `<div data-i="${i}" class="rg ${g.id === auto.current ? 'cur' : ''} ${i === radarFocus ? 'focus' : ''} ${g.state !== 'in' || g.skip ? 'dim' : ''}">
       <div class="top">${bars(g.signal)}<span>${esc(g.away.abbr)}</span><span class="sc">${g.state === 'pre' ? '@' : `${g.away.score}–${g.home.score}`}</span><span>${esc(g.home.abbr)}</span>${HEART(g.fav)}</div>
       <div class="sub">${esc(statusLine(g))}${g.sit && g.sit.redZone ? `<span class="tag red">Red zone · ${esc(g.sit.poss || '')}</span>` : ''}${g.onBreak && g.state === 'in' ? `<span class="tag amber">${esc(g.breakWhy)}</span>` : ''}</div>
       ${pl || '<div class="pl"><span class="muted">None of your players</span></div>'}${chan}</div>`;
@@ -1462,6 +1512,7 @@ function replay() {
 const bigShotQueue = [];
 let bigShotBusy = false;
 function bigShot(p) {
+  if (document.documentElement.classList.contains('stacked')) return false;   // the banner instead, under the game
   const card = $(`#rail .card[data-pid="${p.who.id}"]`), img = card && card.querySelector('.hs');
   if (!img || !img.naturalWidth) return false;
   if (bigShotBusy) { bigShotQueue.push(p); return true; }
@@ -1724,18 +1775,19 @@ function tourKey(k) {
 }
 // The first time your players are on screen after setup: the tour, once.
 setInterval(() => {
-  if (!tour.on && !tourDone() && $('#rail .card') && $('#splash').classList.contains('gone') && !$('#setup').classList.contains('on')) startTour();
+  if (!phone && !tour.on && !tourDone() && $('#rail .card') && $('#splash').classList.contains('gone') && !$('#setup').classList.contains('on')) startTour();
 }, 2000);
 
 // ---- TV remote keys: arrows, OK (Enter), Back (Escape/Backspace), P to pause. The TV app sends them through
 // ftvKey; Back only comes here while All Games is open or a switch is counting down (Android.setBack).
 addEventListener('keydown', onKey);
 window.ftvKey = key => onKey({ key, repeat: false, preventDefault() {} });
-setInterval(() => native && native.setBack(tour.on || radarOpen || !!auto.pending || Date.now() < updateCardUntil), 250);
+setInterval(() => native && native.setBack(tour.on || radarOpen || settingsOpen || !!auto.pending || Date.now() < updateCardUntil), 250);
 
 function onKey(e) {
   const k = e.key;
   if (e.repeat) return;
+  if (settingsOpen) { if (k === 'Escape' || k === 'Backspace' || k === 'GoBack') closeSettings(); return; }
   if (tour.on) { tourKey(k); e.preventDefault(); return; }   // the remote tour has the keys while it's up
   // Welcome screen: OK opens "Install unknown apps" for FantasyTV until it's allowed.
   if ($('#setup').classList.contains('on')) {
@@ -1788,6 +1840,56 @@ function onKey(e) {
   $('#radar').classList.toggle('on', radarOpen);
   renderRadar();
   e.preventDefault();
+}
+
+// ---- Phone and Fold: touch does what the remote's keys do, and Settings (the phone remote's own page) opens over
+// the game instead of on a second phone.
+let settingsOpen = false;
+function openSettings() {
+  let f = $('#phoneSettings');
+  if (!f) {
+    f = document.createElement('iframe');
+    f.id = 'phoneSettings';
+    f.src = '/remote.html?app=1';
+    document.body.appendChild(f);
+  }
+  settingsOpen = true;
+  document.documentElement.classList.add('settings');
+}
+function closeSettings() {
+  settingsOpen = false;
+  document.documentElement.classList.remove('settings');
+}
+addEventListener('message', e => { if (e.origin === location.origin && e.data && e.data.ftv === 'close') closeSettings(); });
+function openRadar() { radarOpen = true; radarFocus = 0; $('#radar').classList.add('on'); renderRadar(); }
+
+if (phone) {
+  $('#pbGames').onclick = e => { e.stopPropagation(); radarOpen ? onKey({ key: 'Escape', preventDefault() {} }) : openRadar(); };
+  $('#pbSettings').onclick = e => { e.stopPropagation(); openSettings(); };
+  const key = k => onKey({ key: k, repeat: false, preventDefault() {} });
+  document.addEventListener('click', e => {
+    if (settingsOpen || tour.on) return;
+    const t = e.target;
+    // A popup: watch that game, or replay the play in this one (what OK does on the remote).
+    const pop = t.closest('#pops .pop.on');
+    if (pop) { if (pop.act) { aimPop(pop); key('Enter'); } return; }
+    if (t.closest('#atTag')) { handle({ type: 'pause', on: !auto.paused }); return; }   // AutoTune on / off
+    if (t.closest('#countdown') && auto.pending) { key('Escape'); return; }             // cancel the switch
+    if (t.closest('#update.on')) { key('Enter'); return; }
+    if (radarOpen) {
+      const row = t.closest('#radar .rg');
+      if (row) { radarFocus = +row.dataset.i; key(t.closest('svg') ? 'ArrowRight' : 'Enter'); return; }   // ♥ hearts it
+      if (!t.closest('#radar')) key('Escape');   // a tap beside the list closes it
+    }
+  });
+  // Swipe left: rewind 10 s (again for more). Swipe right: back to live.
+  let sx = 0, sy = 0, st = 0;
+  addEventListener('touchstart', e => { const p = e.touches[0]; sx = p.clientX; sy = p.clientY; st = Date.now(); }, { passive: true });
+  addEventListener('touchend', e => {
+    if (settingsOpen || radarOpen || tour.on) return;
+    const p = e.changedTouches[0], dx = p.clientX - sx, dy = p.clientY - sy;
+    if (Math.abs(dx) > 70 && Math.abs(dx) > 2 * Math.abs(dy) && Date.now() - st < 800) key(dx < 0 ? 'ArrowLeft' : 'ArrowRight');
+  }, { passive: true });
 }
 
 start();

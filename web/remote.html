@@ -208,7 +208,7 @@
 </head>
 <body>
 <header>
-  <div class="row"><span id="logo"></span><h1>ALL GAMES</h1><span class="n" id="count"></span><span class="dot" id="tvDot" title="TV"></span>
+  <div class="row"><button class="ib" id="toGame" hidden aria-label="Back to the game"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button><span id="logo"></span><h1>ALL GAMES</h1><span class="n" id="count"></span><span class="dot" id="tvDot" title="TV"></span>
     <button class="ib" id="gear" aria-label="Settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button></div>
   <div class="at"><div style="flex:1"><b>AUTOTUNE</b><br><small id="atText">Waiting for the TV…</small></div><button class="switch" id="atSwitch" aria-label="AutoTune"></button></div>
   <button type="button" class="watch" id="rzBtn" hidden style="width:100%;margin:8px 0 0;background:none;border-color:var(--red);color:var(--text)">WATCH NFL REDZONE</button>
@@ -442,6 +442,26 @@ function progress(g) {
   return Math.min(1, ((Math.min(g.period, 4) - 1) + (15 - (m + (s || 0) / 60)) / 15) / 4);
 }
 document.getElementById('logo').innerHTML = LOGO;
+// Inside the phone app (Settings over the game): a back arrow to the game, since there's no second screen.
+if (new URLSearchParams(location.search).has('app')) {
+  const back = document.getElementById('toGame');
+  back.hidden = false;
+  back.onclick = () => parent.postMessage({ ftv: 'close' }, location.origin);
+  // Here the phone is the TV: the words follow, wherever they're drawn.
+  const PHONE_WORDS = [[/SAVE TO TV AND START/g, 'SAVE AND START'], [/SAVE TO TV/g, 'SAVE'], [/Save to TV/g, 'Save'],
+    [/stays? on your TV/g, m => m.replace('your TV', 'this phone')], [/on your TV/g, 'on this phone'],
+    [/Waiting for the TV…/g, 'Starting…'], [/[Tt]he TV (is reloading|loads|itself|will see)/g, (m, v) => `FantasyTV ${v}`], [/Your TV reached/g, 'FantasyTV reached']];
+  const reword = n => {
+    if (n.nodeType === 3) {
+      let t = n.nodeValue;
+      for (const [re, to] of PHONE_WORDS) t = t.replace(re, to);
+      if (t !== n.nodeValue) n.nodeValue = t;
+    } else if (n.nodeType === 1 && n.tagName !== 'SCRIPT') n.childNodes.forEach(reword);
+  };
+  reword(document.body);
+  new MutationObserver(ms => ms.forEach(m => m.type === 'characterData' ? reword(m.target) : m.addedNodes.forEach(reword)))
+    .observe(document.body, { childList: true, subtree: true, characterData: true });
+}
 let state = null, open = {};
 
 let lastNew = 0, lastAt = 0;

@@ -472,6 +472,47 @@
   #tour .tqr img { width: 220px; height: 220px; padding: 8px; background: #fff; border-radius: 14px; flex: none; }
   /* while the tour is up, only its sample popups show */
   #stage:has(#tour.on) #pops .pop:not(.demo) { visibility: hidden; }
+
+  /* ---- Phone and Fold: buttons for what the remote does, Settings over the game, no pairing codes */
+  #phoneBar { display: none; }
+  html.phone #phoneBar { display: flex; position: fixed; z-index: 90; gap: 10px;
+    top: max(12px, env(safe-area-inset-top)); right: max(14px, env(safe-area-inset-right)); }
+  #phoneBar button { width: 46px; height: 46px; border-radius: 50%; display: grid; place-items: center; padding: 0;
+    background: rgba(2,30,66,.78); border: 1px solid rgba(255,255,255,.18); color: #fff; }
+  #phoneBar svg { width: 22px; height: 22px; }
+  html.phone #atPair, html.phone #idle .pairrow, html.phone #idle .hint, html.phone #radar footer { display: none !important; }
+  html.phone #atTag, html.phone #pops .pop, html.phone #radar .rg { cursor: pointer; }
+  /* Stacked (phone upright, Fold open): the game across the top, then a panel you scroll. Sizes are the TV's, and
+     the panel is zoomed to the phone's width (tv.js), so a card reads the same on the cover screen and unfolded. */
+  #panel { display: none; }
+  html.stacked, html.stacked body { background: #01142e; }
+  html.stacked #panel { display: block; position: fixed; left: 0; right: 0; top: var(--vbottom, 56vw); bottom: 0; overflow-y: auto;
+    overscroll-behavior: contain; background: #01142e; border-top: 1px solid var(--line); }
+  html.stacked #panel > .in { display: flex; flex-direction: column; gap: 14px; padding: 16px 16px 40px; }
+  html.stacked #ticker, html.stacked #callouts { display: none; }
+  html.stacked #lower { position: static; display: flex; flex-direction: column; align-items: stretch; gap: 0; transform: none; opacity: 1; order: 3; }
+  html.stacked #atTag { position: static; align-self: flex-start; margin: 0 0 12px 6px; }
+  html.stacked #bug { margin: 0; }
+  html.stacked #rail { flex-direction: column; height: auto; border-radius: 22px; }
+  html.stacked #rail .cards { display: grid !important; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); width: 100%; }
+  html.stacked .card, html.stacked .card.lead { width: auto; min-width: 0; height: 150px; box-sizing: border-box; border-right: 0; border-bottom: 1px solid var(--line); position: relative; overflow: hidden; }
+  html.stacked #rail .fill { display: none; }
+  html.stacked .mu { width: 100%; border-left: 0; padding: 18px 20px; }
+  html.stacked #pops { position: static; order: 2; align-items: stretch; gap: 10px; }
+  html.stacked #pops:empty { display: none; }
+  html.stacked .pop, html.stacked .pop.on { transform: none; }
+  html.stacked .pop:not(.on) { display: none; }
+  html.stacked #countdown { position: static; order: 0; transform: none; display: none; border-radius: 18px; overflow: hidden; }
+  html.stacked #countdown.on { display: block; }
+  html.stacked #countdown .why { display: none; }
+  html.stacked #tdBanner { position: relative; order: 1; left: auto; bottom: auto; width: 100%; max-width: 560px; align-self: center; }
+  html.stacked #radar { position: fixed; width: 620px; z-index: 95; }
+  html.stacked #idle h2, html.stacked #idle .games { display: none; }
+  /* picture-in-picture: just the game and its score bug */
+  html.pip #phoneBar, html.pip #rail, html.pip #atTag, html.pip #pops, html.pip #ticker, html.pip #callouts { display: none !important; }
+  #phoneSettings { display: none; position: fixed; inset: 0; width: 100%; height: 100%; border: 0; z-index: 100; background: #01142e; }
+  html.settings #phoneSettings { display: block; }
+  html.settings #phoneBar { display: none; }
 </style>
 </head>
 <body>
@@ -557,6 +598,13 @@
     </div>
   </div>
   <div id="splash"><img class="wm" src="img/wordmark.png" alt="FantasyTV"><p id="splashMsg">Loading your lineup…</p></div>
+</div>
+<!-- Phone upright or Fold open: under the game, the score bug, your players and matchups, popups (tv.js moves them in) -->
+<div id="panel"><div class="in"></div></div>
+<!-- Phone and Fold only: all games, and Settings -->
+<div id="phoneBar">
+  <button id="pbGames" aria-label="All games"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+  <button id="pbSettings" aria-label="Settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/mpegts.js@1.7.3/dist/mpegts.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>

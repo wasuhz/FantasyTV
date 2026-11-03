@@ -4,6 +4,9 @@ import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.content.ActivityNotFoundException;
 import android.content.Intent;
+import android.content.pm.ActivityInfo;
+import android.content.pm.PackageManager;
+import android.content.res.Configuration;
 import android.provider.Settings;
 import android.graphics.Color;
 import android.net.Uri;
@@ -47,6 +50,11 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle saved) {
         super.onCreate(saved);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        // A phone (or a Fold) turns and resizes with you; a TV stays in landscape. The phone is its own remote, so its
+        // server answers only this app.
+        phone = isPhone();
+        if (!phone) setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
+        TvServer.localOnly = phone;
 
         server = new TvServer(this);
         // The last update's download (about 40 MB) isn't needed once it's installed.
@@ -89,6 +97,13 @@ public class MainActivity extends Activity {
         web.setFocusable(true);
         root.addView(web, new FrameLayout.LayoutParams(-1, -1));
         setContentView(root);
+        if (phone) {
+            fullScreen();
+            // The screen changes shape (turning the phone, folding or unfolding): the picture keeps 16:9 inside it.
+            root.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> {
+                if (r - l != or - ol || b - t != ob - ot) main.post(this::layoutVideo);
+            });
+        }
         web.requestFocus();
         // The server can wait a few seconds for the port (see TvServer.start), so off the main thread; then the page.
         new Thread(() -> {
@@ -108,8 +123,8 @@ public class MainActivity extends Activity {
 
     /** What the page can ask of the TV. Called on the WebView's thread. */
     final class Bridge {
-        @JavascriptInterface public void play(String url) { main.post(() -> { playback.play(url); clock.setActive(true); }); }
-        @JavascriptInterface public void stop() { main.post(() -> { playback.stop(); clock.setActive(false); }); }
+        @JavascriptInterface public void play(String url) { main.post(() -> { playback.play(url); clock.setActive(true); tuned = true; }); }
+        @JavascriptInterface public void stop() { main.post(() -> { playback.stop(); clock.setActive(false); tuned = false; }); }
         /** True while Back should go to the page (closing the Radar, cancelling a switch) instead of leaving. */
         @JavascriptInterface public void setBack(boolean handled) { backHandled = handled; }
         /** Split screen: this channel on the right (muted), the main one moves left. Null or empty: back to one. */
@@ -160,6 +175,63 @@ public class MainActivity extends Activity {
             });
         }
         @JavascriptInterface public void split(String url) { main.post(() -> setSplit(url == null || url.isEmpty() ? null : url)); }
+        /** A phone or tablet (touch, turns, no remote) rather than a TV. */
+        @JavascriptInterface public boolean isPhone() { return phone; }
+        /** Phone, held upright or unfolded: the picture goes here (screen pixels); a zero width puts it back. */
+        @JavascriptInterface public void videoRect(int x, int y, int w, int h) {
+            main.post(() -> { videoAt = w > 0 && h > 0 ? new android.graphics.Rect(x, y, x + w, y + h) : null; layoutVideo(); });
+        }
+    }
+
+    private volatile android.graphics.Rect videoAt;   // where the page wants the picture, when it says
+
+    private boolean phone;
+
+    /** Not a TV: Android TV / Google TV report a television UI mode (and leanback). */
+    private boolean isPhone() {
+        int mode = getResources().getConfiguration().uiMode & Configuration.UI_MODE_TYPE_MASK;
+        return mode != Configuration.UI_MODE_TYPE_TELEVISION && !getPackageManager().hasSystemFeature(PackageManager.FEATURE_LEANBACK);
+    }
+
+    /** Phone: the game fills the screen, the status and navigation bars come back with a swipe from the edge. */
+    @SuppressWarnings("deprecation")
+    private void fullScreen() {
+        if (android.os.Build.VERSION.SDK_INT >= 30) {
+            getWindow().setDecorFitsSystemWindows(false);
+            android.view.WindowInsetsController c = getWindow().getInsetsController();
+            if (c != null) {
+                c.hide(android.view.WindowInsets.Type.systemBars());
+                c.setSystemBarsBehavior(android.view.WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+            }
+        } else {
+            getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_FULLSCREEN | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                    | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION);
+        }
+        if (android.os.Build.VERSION.SDK_INT >= 28)
+            getWindow().getAttributes().layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
+    }
+
+    /**
+     * Where the picture goes: the whole screen on a TV; on a phone the largest 16:9 box, centred like the page's
+     * 1920×1080 stage, so the overlay lines up with the picture and the game isn't stretched.
+     */
+    private android.graphics.Rect videoBox() {
+        int w = root.getWidth(), h = root.getHeight();
+        if (!phone || w == 0 || h == 0) return new android.graphics.Rect(0, 0, w, h);
+        if (videoAt != null && !isInPictureInPictureMode()) return videoAt;
+        float s = Math.min(w / 1920f, h / 1080f);
+        int bw = Math.round(1920 * s), bh = Math.round(1080 * s), x = (w - bw) / 2, y = (h - bh) / 2;
+        return new android.graphics.Rect(x, y, x + bw, y + bh);
+    }
+
+    private String splitUrl;
+
+    private void layoutVideo() {
+        if (splitUrl != null) { setSplit(splitUrl); return; }
+        android.graphics.Rect b = videoBox();
+        FrameLayout.LayoutParams p = new FrameLayout.LayoutParams(b.width(), b.height());
+        p.leftMargin = b.left; p.topMargin = b.top;
+        mainSurface.setLayoutParams(p);
     }
 
     private volatile JSONObject newer;   // a newer release on GitHub, once found
@@ -183,20 +255,23 @@ public class MainActivity extends Activity {
      * centred vertically (y 270–810), leaving the top for titles and the bottom for the score bug and your players.
      */
     private void setSplit(String url) {
-        int w = root.getWidth(), h = root.getHeight();
+        android.graphics.Rect box = videoBox();
+        int w = box.width(), h = box.height();
+        boolean same = url != null && url.equals(splitUrl);
+        splitUrl = url;
         if (url == null) {
             sidePlayback.stop();
             sideSurface.setVisibility(View.GONE);
-            mainSurface.setLayoutParams(new FrameLayout.LayoutParams(-1, -1));
+            if (phone) layoutVideo(); else mainSurface.setLayoutParams(new FrameLayout.LayoutParams(-1, -1));
             return;
         }
         FrameLayout.LayoutParams left = new FrameLayout.LayoutParams(w / 2, h / 2), right = new FrameLayout.LayoutParams(w / 2, h / 2);
-        left.leftMargin = 0; left.topMargin = h / 4;
-        right.leftMargin = w / 2; right.topMargin = h / 4;
+        left.leftMargin = box.left; left.topMargin = box.top + h / 4;
+        right.leftMargin = box.left + w / 2; right.topMargin = box.top + h / 4;
         mainSurface.setLayoutParams(left);
         sideSurface.setLayoutParams(right);
         sideSurface.setVisibility(View.VISIBLE);
-        sidePlayback.play(url);
+        if (!same) sidePlayback.play(url);   // a new screen shape only moves it
     }
 
     private void tell(String state) {
@@ -223,7 +298,27 @@ public class MainActivity extends Activity {
         return true;
     }
 
-    @Override protected void onPause() { super.onPause(); playback.pause(); sidePlayback.pause(); clock.setPaused(true); }
+    private boolean tuned;   // a channel is playing
+
+    /** Phone: leaving for another app keeps the game in a small window (picture-in-picture), AutoTune still on. */
+    @Override protected void onUserLeaveHint() {
+        super.onUserLeaveHint();
+        if (!phone || !tuned) return;
+        try {
+            enterPictureInPictureMode(new android.app.PictureInPictureParams.Builder().setAspectRatio(new android.util.Rational(16, 9)).build());
+        } catch (IllegalStateException e) { Log.w(TAG, "pip", e); }
+    }
+    @Override public void onPictureInPictureModeChanged(boolean on, Configuration c) {
+        super.onPictureInPictureModeChanged(on, c);
+        web.evaluateJavascript("document.documentElement.classList.toggle('pip', " + on + ")", null);
+        main.post(this::layoutVideo);
+    }
+
+    @Override protected void onPause() {
+        super.onPause();
+        if (isInPictureInPictureMode()) return;   // still on screen, in its small window
+        playback.pause(); sidePlayback.pause(); clock.setPaused(true);
+    }
     @Override protected void onResume() { super.onResume(); playback.resume(); sidePlayback.resume(); clock.setPaused(false); }
     /** Home or another app in front: AutoTune stops switching until you come back (RosterRadar does the same). */
     @Override protected void onStop() { super.onStop(); playback.suspend(); sidePlayback.suspend(); web.evaluateJavascript("window.ftvAway && ftvAway(true)", null); }
