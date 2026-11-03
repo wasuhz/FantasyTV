@@ -1,23 +1,41 @@
 ﻿# FantasyTV
 
-**NFL RedZone, but for your own fantasy teams.** FantasyTV is an Android TV app for people who watch football through
-IPTV (Dispatcharr or an Xtream Codes login). It follows your fantasy leagues, finds the games your players are in on
+**NFL RedZone, but for your own fantasy teams.** FantasyTV is an Android app, for TVs and for phones (foldables
+included), for people who watch football through IPTV (Dispatcharr or an Xtream Codes login). It follows your fantasy leagues, finds the games your players are in on
 your own channels, and switches to the one most likely to score you points, with your live fantasy scores on screen.
 
 It reads ESPN's live play-by-play, which usually runs ahead of an IPTV stream, so it can switch to a game just before a
 big play reaches your picture, and it keeps every popup in step with your stream so nothing is spoiled.
 
+## Compatibility
+
+One APK for every device, **Android 8.0 or newer**. It checks what it's running on and sets itself up for it.
+
+| Device | Status |
+|---|---|
+| **Android TV / Google TV** (Nvidia Shield, onn 4K, Chromecast with Google TV, most Google TVs) | Supported. The Shield gets every feature; lower-powered sticks run a lighter mode automatically |
+| **Fire TV** (Fire OS 7/8) | Should work, untested |
+| **Android phones and tablets** | Supported: touch controls, settings in the app, stacked layout upright, full screen sideways, picture-in-picture |
+| **Foldables** (Galaxy Fold) | Supported: folded, unfolded and half-open; the layout follows the screen without restarting the stream |
+| **iPhone, iPad, Apple TV** | Not supported (an iPhone can still be the remote for a TV, in its browser) |
+
 ## Install
 
-On an Android TV / Google TV device running **Android 8.0 or newer** (Nvidia Shield, onn 4K, Chromecast with Google TV,
-most Google TVs; Fire TV on Fire OS 7/8 should work but is untested):
+Same app and same code, **1790534**, on a TV or a phone. It's always the latest release from
+[FantasyTV-releases](https://github.com/wasuhz/FantasyTV-releases/releases), and the app updates itself once installed.
+
+**On a TV:**
 
 1. Install **Downloader** (by AFTVnews) from the TV's app store.
-2. Enter code **1790534** (always the latest release from
-   [FantasyTV-releases](https://github.com/wasuhz/FantasyTV-releases/releases)).
+2. Enter code **1790534**.
 3. Open FantasyTV and scan the QR code with your phone (same Wi-Fi) to set it up.
 
-The app updates itself from inside once installed.
+**On an Android phone or Fold:**
+
+1. In the phone's browser, open **aftv.news/1790534** (or
+   [download the APK](https://github.com/wasuhz/FantasyTV-releases/releases/latest/download/FantasyTV.apk)).
+2. Allow installs from the browser when Android asks, then install.
+3. Open FantasyTV: it walks you through setup on the phone (your stream server first, then your fantasy teams).
 
 ## What you need
 
@@ -37,16 +55,20 @@ The app updates itself from inside once installed.
 | **Moments** | Points popups, touchdown pop-outs, injury alerts for your starters, 🔥 for hot runs, final-score cards |
 | **Remote** | Up: AutoTune on/off · Down: all games · Left/Right: rewind 10 s / live · OK: replay or watch a popup's game. A first-launch tour explains it all |
 | **Phone remote** | Settings, channels per game, rewind, split screen, Practice Sunday (simulated games any day) |
+| **On a phone** | Tap a popup to watch that game, tap AutoTune, swipe left/right to rewind / go live, ☰ for all games, ⚙ for settings; picture-in-picture when you leave the app |
 
 ## Privacy
 
-Your logins (IPTV, ESPN cookies, Yahoo sign-in) are stored only on your own TV. There is no FantasyTV server and no
-account. The app talks only to your IPTV server, ESPN, Sleeper, Yahoo (if connected) and GitHub (for updates).
+Your logins (IPTV, ESPN cookies, Yahoo sign-in) are stored only on the device FantasyTV runs on. There is no
+FantasyTV server and no account. The app talks only to your IPTV server, ESPN, Sleeper, Yahoo (if connected) and GitHub
+(for updates). On a TV, the phone remote reaches it over your home Wi-Fi; on a phone, the app's local server answers
+only the app itself.
 
 ## Building from source
 
-- **TV app:** `android/` (Gradle, JDK 17). `install.ps1 <tv-address:5555>` builds and installs over adb.
-  The screens are the web pages in `web/`, packed into the APK.
+- **The app (TV and phone):** `android/` (Gradle, JDK 17). `install.ps1 <device-address:port>` builds and installs over
+  adb (a TV's network debugging, or a phone's Wireless debugging). The screens are the web pages in `web/`, packed into
+  the APK; on a phone `tv.html` switches to touch and the phone layouts.
 - **PC test version:** `start.ps1` runs the same screens in a browser at http://localhost:8765/ (TV on the left,
   phone remote on the right). Practice Sunday works without any IPTV.
 - **Release signing** uses a key kept outside the project; without it, builds use the debug key.
@@ -55,8 +77,9 @@ account. The app talks only to your IPTV server, ESPN, Sleeper, Yahoo (if connec
 
 | Path | What |
 |---|---|
-| `web/tv.html`, `web/js/tv.js` | The TV screen: score bug, cards, matchups, popups, All Games, tour |
-| `web/remote.html` | The phone remote and settings |
+| `web/tv.html`, `web/js/tv.js` | The screen: score bug, cards, matchups, popups, All Games, tour; touch and phone layouts |
+| `web/remote.html` | The phone remote and settings (also the settings screen inside the phone app) |
+| `site/` | fantasytvapp.com |
 | `web/js/engine.js` | AutoTune: ranking and switching rules |
 | `web/js/data.js` | Sleeper, ESPN (scoreboard and fantasy leagues), Yahoo merge |
 | `web/js/iptv.js` | Finding each game's channel in Dispatcharr / Xtream |
