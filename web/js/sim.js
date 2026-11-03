@@ -50,20 +50,29 @@ export class Sim {
     for (const p of Object.values(roster)) this.proj[p.id] = projFor(p.pos);
   }
 
-  newGame(i, a, h) {
+  /** A game already under way (1st to 3rd quarter); fresh: a new kickoff (a finished game's replacement). */
+  newGame(i, a, h, fresh = false) {
     const away = team(a), home = team(h);
-    const period = 1 + (i % 3);
-    const g = { id: 'sim' + i, away, home, start: new Date().toISOString(), state: 'in', statusName: 'STATUS_IN_PROGRESS',
-      period, clockSec: Math.round(R(120, 880)), detail: '', network: pick(['CBS', 'FOX', 'NFL+']), sit: null,
+    const period = fresh ? 1 : 1 + (i % 3);
+    this.round = (this.round || 0) + 1;
+    const g = { id: `sim${i}-${this.round}`, away, home, start: new Date().toISOString(), state: 'in', statusName: 'STATUS_IN_PROGRESS',
+      period, clockSec: fresh ? 900 : Math.round(R(120, 880)), detail: '', network: pick(['CBS', 'FOX', 'NFL+']), sit: null,
       _poss: pick([away, home]), _ytg: Math.round(R(25, 80)), _down: 1, _dist: 10, _next: Date.now() + R(1000, 7000), _breakUntil: 0 };
-    away.score = 7 * Math.floor(R(0, period + 1)) + (Math.random() < 0.4 ? 3 : 0);
-    home.score = 7 * Math.floor(R(0, period + 1)) + (Math.random() < 0.4 ? 3 : 0);
+    away.score = fresh ? 0 : 7 * Math.floor(R(0, period + 1)) + (Math.random() < 0.4 ? 3 : 0);
+    home.score = fresh ? 0 : 7 * Math.floor(R(0, period + 1)) + (Math.random() < 0.4 ? 3 : 0);
     this.publish(g, { type: 'Rush', text: 'Drive continues' });
     return g;
   }
 
   /** Advance every game to `now`. */
   step(now = Date.now()) {
+    // Practice never runs dry: a minute after a game ends, the same teams kick off again (their players' points start
+    // over, like a new week), so Practice Sunday keeps going as long as the app is open.
+    this.games = this.games.map((g, i) => {
+      if (g.state !== 'post' || now - (g._endedAt || now) < 60000) return g;
+      for (const p of Object.values(this.roster)) if (p.team === g.away.abbr || p.team === g.home.abbr) delete this.stats[p.id];
+      return this.newGame(i, g.away.abbr, g.home.abbr, true);
+    });
     for (const g of this.games) {
       if (g.state !== 'in' || now < g._next) continue;
       if (g._breakUntil && now < g._breakUntil) continue;
@@ -100,7 +109,9 @@ export class Sim {
 
     const pass = Math.random() < 0.58;
     let gain = pass ? (Math.random() < 0.36 ? 0 : Math.round(R(3, 18))) : Math.round(R(-2, 9));
-    if (Math.random() < 0.05) gain = Math.round(R(25, 60));
+    // Livelier than real football, for a demo: more big plays, and drives in close usually punch it in.
+    if (Math.random() < 0.1) gain = Math.round(R(25, 60));
+    if (g._ytg <= 12 && gain > 0 && Math.random() < 0.4) gain = g._ytg;
     if (Math.random() < 0.02) return this.turnover(g, 'Interception', `${off.abbr} pass intercepted`, now, false, 100 - g._ytg, true);
     gain = Math.min(gain, g._ytg);
     g._ytg -= gain;
@@ -123,7 +134,7 @@ export class Sim {
     else { g._down++; g._dist -= gain; }
     if (g._down > 4) return this.turnover(g, 'Turnover on Downs', `${off.abbr} turnover on downs`, now, false, 100 - g._ytg);
     const timeout = Math.random() < 0.04;
-    if (timeout) { g._breakUntil = now + R(15000, 30000); const to = this.timeouts(g); to[def.abbr] = Math.max(0, to[def.abbr] - 1); }
+    if (timeout) { g._breakUntil = now + R(6000, 10000); const to = this.timeouts(g); to[def.abbr] = Math.max(0, to[def.abbr] - 1); }
     this.publish(g, { type: timeout ? 'Timeout' : pass ? 'Pass Reception' : 'Rush', text: timeout ? `Timeout ${def.abbr}` : text });
   }
 
@@ -133,20 +144,20 @@ export class Sim {
     g._poss = g._poss === g.home ? g.away : g.home;
     g._ytg = Math.max(5, Math.min(95, newYtg));
     g._down = 1; g._dist = 10;
-    if (scored) g._breakUntil = now + R(20000, 35000);
+    if (scored) g._breakUntil = now + R(6000, 10000);   // short: practice has no picture to fill a break
     this.publish(g, { type, text });
   }
 
   endQuarter(g, now) {
     if (g.period >= 4) {
       if (g.home.score === g.away.score) g.home.score += 3;
-      g.state = 'post'; g.statusName = 'STATUS_FINAL'; g.detail = 'Final'; g.sit = null; g.clock = '0:00';
+      g.state = 'post'; g.statusName = 'STATUS_FINAL'; g.detail = 'Final'; g.sit = null; g.clock = '0:00'; g._endedAt = now;
       return;
     }
     g.period++;
     g.clockSec = 900;
     g.statusName = g.period === 3 ? 'STATUS_HALFTIME' : 'STATUS_END_PERIOD';
-    g._breakUntil = now + (g.period === 3 ? 45000 : 20000);
+    g._breakUntil = now + (g.period === 3 ? 20000 : 8000);
     if (g.period === 3) { g._poss = g._poss === g.home ? g.away : g.home; g._ytg = 75; g._down = 1; g._dist = 10; g._to = null; }   // fresh timeouts for the second half
     this.publish(g, { type: g.period === 3 ? 'End of Half' : 'End Period', text: g.period === 3 ? 'Halftime' : `End of Q${g.period - 1}` });
   }

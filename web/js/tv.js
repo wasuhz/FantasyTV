@@ -922,14 +922,19 @@ function renderBug(g) {
 
 
 /** You vs your opponent in each league: score, then a bar of your share of the projected total. */
-// 🔥 on a matchup: your team has scored 10+ in the last 10 minutes (each league's own points, as shown).
-const HOT_PTS = 10, HOT_MS = 10 * 60e3;
+// 🔥 on a matchup: your team has scored 15+ in the last 10 minutes (shown for 5 of them) (each league's own points, as shown).
+// The flame shows for 5 minutes from the moment the run gets there, then goes; it can only come back once the run has
+// cooled off (under 15 in the last 10 minutes) and heated up again.
+const HOT_PTS = 15, HOT_MS = 10 * 60e3, FIRE_SHOW_MS = 5 * 60e3;
 const scoreTrail = {};   // league -> [[time, your points]], the last 10 minutes
+const fireSince = {};    // league -> when its current run turned hot
 function onFire(m) {
   const now = Date.now(), trail = scoreTrail[m.league] ||= [];
   if (!trail.length || trail[trail.length - 1][1] !== m.me) trail.push([now, m.me]);
   while (trail.length > 1 && now - trail[1][0] > HOT_MS) trail.shift();   // keep the score as of 10 minutes ago
-  return m.me - trail[0][1] >= HOT_PTS;
+  if (m.me - trail[0][1] < HOT_PTS) { fireSince[m.league] = 0; return false; }
+  fireSince[m.league] ||= now;
+  return now - fireSince[m.league] < FIRE_SHOW_MS;
 }
 
 function renderMatchups() {
@@ -948,7 +953,7 @@ function renderMatchups() {
     // 5. Settled either way says so (the win chance shows how close the rest are).
     const badge = m.win != null && win >= 99 ? ['clinch', 'CLINCHED'] : m.win != null && win <= 1 ? ['miracle', 'NEED A MIRACLE'] : [win >= 50 ? 'up' : 'down', `${win}% WIN`];
     return `<div><div class="lg">${esc(m.league.toUpperCase())}<b class="wp ${badge[0]}">${badge[1]}</b></div>
-      <div class="ln"><span class="a">${esc(m.team)}</span><span class="s ${m.me >= m.them ? 'win' : 'lose'}"><span class="n">${hot.has(m.league) ? '<i class="fire" title="10+ points in the last 10 minutes">🔥</i>' : ''}${rollHtml('me:' + m.league, m.me, false)}</span></span><span class="v">vs</span>
+      <div class="ln"><span class="a">${esc(m.team)}</span><span class="s ${m.me >= m.them ? 'win' : 'lose'}"><span class="n">${hot.has(m.league) ? '<i class="fire" title="15+ points in 10 minutes">🔥</i>' : ''}${rollHtml('me:' + m.league, m.me, false)}</span></span><span class="v">vs</span>
         <span class="s ${m.them > m.me ? 'win' : 'lose'}">${rollHtml('them:' + m.league, m.them, false)}</span><span class="b">${esc(m.opp)}</span>
         <div class="bar">${rollBar('win:' + m.league, win)}</div></div></div>`;
   }).join('') + '</div>';
@@ -982,7 +987,8 @@ function renderRail(g) {
     return `<div data-pid="${esc(p.id)}" class="card ${i === 0 && !p.game ? 'lead' : ''} ${p.bench ? 'bench' : ''} ${p.game ? 'away' : ''} ${hitAge < 10000 ? (hit.td ? 'hit td' : 'hit') : ''}" ${hitAge < 10000 ? `data-hit="${hit.at}" style="--hit:${hit.color}"` : ''}>
       ${hitAge < 10000 ? `<i class="fx"></i>${hit.td ? '<i class="fx b"></i>' : ''}` : ''}
       ${p.espn ? `<img class="hs" src="https://a.espncdn.com/i/headshots/nfl/players/full/${p.espn}.png" alt="" onerror="this.remove()">` : ''}
-      <div class="nm">${i === 0 && !p.game ? HEART(g.fav) : ''}${esc(p.short)} <span class="pos">${p.pos}</span>${p.pts >= 20 ? '<i class="fire">🔥</i>' : ''}${p.teams > 1 ? `<span class="pos" title="on ${p.teams} of your teams">×${p.teams}</span>` : ''}</div>
+      ${p.pts >= 20 ? '<i class="fire corner" title="20+ points today">🔥</i>' : ''}
+      <div class="nm">${i === 0 && !p.game ? HEART(g.fav) : ''}${esc(p.short)} <span class="pos">${p.pos}</span>${p.teams > 1 ? `<span class="pos" title="on ${p.teams} of your teams">×${p.teams}</span>` : ''}</div>
       <div class="st ${cls}">${hitAge < 10000 && hit.td ? '<span class="tdtag">TOUCHDOWN</span>' : `${where}${p.status ? '● ' + p.status : ''}${p.bench ? ' · bench' : ''}`}</div>
       <div class="p"><b>${rollHtml(p.id, p.pts, hitAge > 120e3)}${hitAge < 10000 ? `<i class="gain big">+${pts(hit.pts)}</i>` : ''}</b><small>${pts(p.proj)} proj</small></div>
       <div class="ln">${esc(p.line) || '&nbsp;'}</div></div>`;

@@ -161,7 +161,7 @@
   .fire { display: inline-block; font-style: normal; animation: fireflick 1.6s ease-in-out infinite alternate; }
   .mu .ln .s .n { position: relative; display: inline-block; }
   .mu .ln .s .fire { position: absolute; right: 100%; top: 50%; transform: translateY(-50%); margin-right: 6px; font-size: 20px; }   /* just left of your score, without moving it */
-  .card .nm .fire { margin-left: 6px; font-size: 22px; }
+  .card > .fire.corner { position: absolute; top: 8px; right: 10px; z-index: 3; font-size: 24px; }   /* 20+ points today: the card's top-right corner, over the photo's edge */
   @keyframes fireflick { from { opacity: 1; } to { opacity: .7; } }
   .mu .bar { height: 4px; border-radius: 2px; background: #3b2030; overflow: hidden; grid-column: 1 / -1; }
   .mu .bar i { display: block; height: 100%; background: var(--green); }
@@ -356,10 +356,10 @@
   @keyframes flip { 0% { transform: rotateX(90deg); background: var(--team); } 25% { transform: none; background: var(--team); } 100% { background: transparent; } }
   #bug .in { position: relative; }
   .drive { position: absolute; left: 0; right: 0; bottom: 0; height: 9px; background: #0b2f5e; z-index: 2; }   /* along the bottom of the score bug */
-  .drive i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--team); }
-  .drive b { position: absolute; top: 1px; width: 18px; height: 7px; margin-left: -9px; box-sizing: border-box; border-radius: 50%; background: #c8773a; border: 1px solid #fff; transition: left 1.2s cubic-bezier(.2,.8,.2,1); }
-  .drive.rz { background: #3a0d18; } .drive.rz i { box-shadow: 0 0 14px var(--red); }
-  .drive::before { content: ''; position: absolute; right: 0; top: 0; bottom: 0; width: 20%; background: rgba(255,77,87,.22); }   /* the red zone: the last 20 yards, softly tinted */
+  .drive i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--team); z-index: 0; }
+  .drive b { position: absolute; z-index: 2; top: 1px; width: 18px; height: 7px; margin-left: -9px; box-sizing: border-box; border-radius: 50%; background: #c8773a; border: 1px solid #fff; transition: left 1.2s cubic-bezier(.2,.8,.2,1); }
+  .drive.rz i { box-shadow: 0 0 14px var(--red); }
+  .drive::before { content: ''; position: absolute; right: 0; top: 0; bottom: 0; width: 20%; z-index: 1; background: rgba(255,77,87,.32); pointer-events: none; }   /* the red zone, the last 20 yards: drawn over the drive bar so it never changes length or colour (the ball stays on top) */
   #bug .in.rzbeat::after { content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; z-index: 3;
     box-shadow: inset 0 0 0 3px rgba(255,77,87,.9), inset 0 0 26px rgba(255,77,87,.55); animation: fadepulse 2.5s ease-in-out infinite alternate; }   /* slow and gentle, a fade the TV does for free */
   /* (no endless colour shimmer on "On field": it made the TV repaint every frame) */
