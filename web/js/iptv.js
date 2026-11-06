@@ -63,16 +63,21 @@ export class Iptv {
     const hits = new Set();
     for (const [id, text] of this.guide.now) if (!text.includes('replay') && !otherSport(text) && m.names(text)) hits.add(id);
     // Channels named after the matchup ("NFL | CAR/GB", "NFL 05: DAL @ PHI", "Cowboys vs Eagles") count too, guide or not.
-    let best = null, bestTier = 9;
+    // Among equal matches: the main broadcast first, then copies of it (4K), then alternate feeds (Prime Vision,
+    // ManningCast, Spanish...), which are often another show or a placeholder slate; then the plainest name, then the
+    // highest channel number.
+    const found = [];
     for (const ch of this.list.channels) {
       const lower = ch.name.toLowerCase();
       if (otherSport(`${lower} ${ch.group.toLowerCase()}`)) continue;   // "NCAAM | UIW/OKST": Cardinals at Cowboys, but college
       const named = m.names(lower) || (/nfl/.test(lower) && m.codes(lower));
       if (!(ch.id && hits.has(ch.id)) && !named) continue;
       const tier = /nfl/.test(ch.group.toLowerCase()) || /^nfl\b/.test(lower) ? 0 : /network|local/.test(ch.group.toLowerCase()) ? 1 : 2;
-      if (tier < bestTier || (tier === bestTier && ch.no > best.no)) { best = { ...ch, via: hits.has(ch.id) ? 'guide' : 'channel name' }; bestTier = tier; }
+      found.push({ ch, key: [tier, ALT_FEED.test(lower) ? 2 : HEAVY.test(lower) ? 1 : 0, lower.length, -ch.no] });
     }
-    return best;
+    found.sort((a, b) => { for (let i = 0; i < a.key.length; i++) if (a.key[i] !== b.key[i]) return a.key[i] - b.key[i]; return 0; });
+    const best = found[0] && found[0].ch;
+    return best ? { ...best, via: hits.has(best.id) ? 'guide' : 'channel name' } : null;
   }
 
   async refresh() {
@@ -89,6 +94,10 @@ const esc = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 // that say they're another sport don't count, unless they also say NFL.
 const OTHER = /\b(?:ncaa\w*|college|cfb|mlb|nhl|nba|wnba|mls|ufl|xfl|cfl|baseball|hockey|basketball|soccer)\b/;
 const otherSport = text => OTHER.test(text) && !/\bnfl\b/.test(text);
+
+// A game's other versions: alternate broadcasts, and heavier copies of the main one.
+const ALT_FEED = /\b(?:vision|alt|alternate|manning\s?cast|megacast|spanish|espa[nñ]ol|deportes|kids|nick(?:elodeon)?|all[- ]?22|coach(?:es)?\s?(?:film|cam)|sky\s?cast|command\s?center|watch\s?party)\b/;
+const HEAVY = /\b(?:4k|uhd|2160p?)\b/;
 
 // Other codes guides and providers use for the same team.
 const ALIAS = { JAX: ['JAC'], LAR: ['LA'], WAS: ['WSH'], WSH: ['WAS'], ARI: ['ARZ'] };
