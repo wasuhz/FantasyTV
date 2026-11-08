@@ -70,6 +70,12 @@ public class MainActivity extends Activity {
         sideSurface = new SurfaceView(this);
         sideSurface.setVisibility(View.GONE);
         root.addView(sideSurface, new FrameLayout.LayoutParams(-1, -1));
+        // Multiview (4 games): two more pictures, beside the split screen's; hidden until the page asks for them.
+        for (int i = 0; i < quadSurface.length; i++) {
+            quadSurface[i] = new SurfaceView(this);
+            quadSurface[i].setVisibility(View.GONE);
+            root.addView(quadSurface[i], new FrameLayout.LayoutParams(-1, -1));
+        }
         mainSurface = surface;
         this.root = root;
 
@@ -176,6 +182,15 @@ public class MainActivity extends Activity {
             });
         }
         @JavascriptInterface public void split(String url) { main.post(() -> setSplit(url == null || url.isEmpty() ? null : url)); }
+        /**
+         * Multiview: the game on screen top left, these three (a JSON array of stream addresses, "" for an empty
+         * quarter) in the other quarters; "" or null goes back to one game.
+         */
+        @JavascriptInterface public void quad(String urls) { main.post(() -> setQuad(urls == null || urls.isEmpty() ? null : urls)); }
+        /** Multiview: the sound from this quarter (0 top left … 3 bottom right). */
+        @JavascriptInterface public void quadSound(int slot) {
+            main.post(() -> { playback.setVolume(slot == 0 ? 1f : 0f); for (int i = 0; i < 3; i++) { Playback p = quadPlayer(i, false); if (p != null) p.setVolume(slot == i + 1 ? 1f : 0f); } });
+        }
         /** A phone or tablet (touch, turns, no remote) rather than a TV. */
         @JavascriptInterface public boolean isPhone() { return phone; }
         /** The device's maker and model ("NVIDIA SHIELD Android TV"): the page picks 4K feeds only where they play. */
@@ -230,6 +245,7 @@ public class MainActivity extends Activity {
     private String splitUrl;
 
     private void layoutVideo() {
+        if (quadJson != null) { setQuad(quadJson); return; }
         if (splitUrl != null) { setSplit(splitUrl); return; }
         android.graphics.Rect b = videoBox();
         FrameLayout.LayoutParams p = new FrameLayout.LayoutParams(b.width(), b.height());
@@ -287,6 +303,65 @@ public class MainActivity extends Activity {
         if (!same) sidePlayback.play(url);   // a new screen shape only moves it
     }
 
+    // ---- Multiview: four games in a 2×2 grid. Top left is the main player (sound, rewind, clock); the other quarters
+    // are the split screen's side player and two more, all muted until the page moves the sound to them.
+    private final SurfaceView[] quadSurface = new SurfaceView[2];
+    private final Playback[] quadExtra = new Playback[2];
+    private final String[] quadUrls = new String[3];
+    private String quadJson;
+
+    /** Quarter i (0–2 of the other three): its player, made on first use when `make`. */
+    private Playback quadPlayer(int i, boolean make) {
+        if (i == 0) return sidePlayback;
+        if (quadExtra[i - 1] == null && make) quadExtra[i - 1] = new Playback(this, quadSurface[i - 1], state -> { }, true);
+        return quadExtra[i - 1];
+    }
+    private SurfaceView quadView(int i) { return i == 0 ? sideSurface : quadSurface[i - 1]; }
+
+    private void setQuad(String json) {
+        if (json == null) {
+            quadJson = null;
+            for (int i = 0; i < 3; i++) {
+                quadUrls[i] = null;
+                Playback p = quadPlayer(i, false);
+                if (p != null) { p.stop(); p.setVolume(0f); }
+                quadView(i).setVisibility(View.GONE);
+            }
+            playback.setVolume(1f);
+            if (phone) layoutVideo(); else mainSurface.setLayoutParams(new FrameLayout.LayoutParams(-1, -1));
+            return;
+        }
+        if (splitUrl != null) { splitUrl = null; sidePlayback.stop(); }   // one or the other
+        quadJson = json;
+        String[] urls = new String[3];
+        try {
+            org.json.JSONArray a = new org.json.JSONArray(json);
+            for (int i = 0; i < 3; i++) urls[i] = a.optString(i, "");
+        } catch (Exception e) { return; }
+        android.graphics.Rect box = videoBox();
+        int w = box.width() / 2, h = box.height() / 2;
+        int[][] at = { { 0, 0 }, { w, 0 }, { 0, h }, { w, h } };
+        FrameLayout.LayoutParams m = new FrameLayout.LayoutParams(w, h);
+        m.leftMargin = box.left; m.topMargin = box.top;
+        mainSurface.setLayoutParams(m);
+        for (int i = 0; i < 3; i++) {
+            SurfaceView v = quadView(i);
+            FrameLayout.LayoutParams p = new FrameLayout.LayoutParams(w, h);
+            p.leftMargin = box.left + at[i + 1][0]; p.topMargin = box.top + at[i + 1][1];
+            v.setLayoutParams(p);
+            String u = urls[i];
+            if (u.isEmpty()) {
+                Playback pl = quadPlayer(i, false);
+                if (pl != null) pl.stop();
+                v.setVisibility(View.GONE);
+                quadUrls[i] = null;
+                continue;
+            }
+            v.setVisibility(View.VISIBLE);
+            if (!u.equals(quadUrls[i])) { quadUrls[i] = u; quadPlayer(i, true).play(u); }   // the same game only moves
+        }
+    }
+
     private void tell(String state) {
         web.evaluateJavascript("window.ftvPlayer && ftvPlayer('" + state + "')", null);
     }
@@ -330,15 +405,15 @@ public class MainActivity extends Activity {
     @Override protected void onPause() {
         super.onPause();
         if (isInPictureInPictureMode()) return;   // still on screen, in its small window
-        playback.pause(); sidePlayback.pause(); clock.setPaused(true);
+        playback.pause(); sidePlayback.pause(); for (Playback q : quadExtra) if (q != null) q.pause(); clock.setPaused(true);
     }
-    @Override protected void onResume() { super.onResume(); playback.resume(); sidePlayback.resume(); clock.setPaused(false); }
+    @Override protected void onResume() { super.onResume(); playback.resume(); sidePlayback.resume(); for (Playback q : quadExtra) if (q != null) q.resume(); clock.setPaused(false); }
     /** Home or another app in front: AutoTune stops switching until you come back (RosterRadar does the same). */
-    @Override protected void onStop() { super.onStop(); playback.suspend(); sidePlayback.suspend(); web.evaluateJavascript("window.ftvAway && ftvAway(true)", null); }
+    @Override protected void onStop() { super.onStop(); playback.suspend(); sidePlayback.suspend(); for (Playback q : quadExtra) if (q != null) q.suspend(); web.evaluateJavascript("window.ftvAway && ftvAway(true)", null); }
     @Override protected void onStart() {
         super.onStart();
         if (web == null) return;
-        playback.wake(); sidePlayback.wake(); web.evaluateJavascript("window.ftvAway && ftvAway(false)", null);
+        playback.wake(); sidePlayback.wake(); for (Playback q : quadExtra) if (q != null) q.wake(); web.evaluateJavascript("window.ftvAway && ftvAway(false)", null);
         // Back from Home: a fresh look for updates (not more than every 10 minutes).
         if (lastUpdateCheck > 0 && System.currentTimeMillis() - lastUpdateCheck > 10 * 60_000L) checkForUpdate(false);
     }
@@ -349,7 +424,7 @@ public class MainActivity extends Activity {
         server.stop();
         clock.release();
         playback.release();
-        sidePlayback.release();
+        sidePlayback.release(); for (Playback q : quadExtra) if (q != null) q.release();
         TvServer.timeshift.stop();   // the rewind buffer goes with the app
         web.destroy();
         super.onDestroy();

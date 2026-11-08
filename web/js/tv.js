@@ -410,7 +410,11 @@ function matchupsNow() {
     const clock = m ? +m[1] * 60 + +m[2] : 900;
     return Math.max(0, Math.min(1, ((4 - Math.min(g.period, 4)) * 900 + clock) / 3600));
   };
-  return last.list.map(m => ({ ...m, win: winChance(m, teamOf, leftFor), settled: settled(m, teamOf, leftFor) }));
+  // Who's still to play on each side (their game not over), for clutch mode.
+  const nameOf = id => ((roster.players[id] || (roster.opponents || {})[id]) || {}).short || id;
+  const left = list => (list || []).filter(s => leftFor(teamOf(s.id)) > 0).map(s => ({ id: s.id, name: nameOf(s.id), team: teamOf(s.id) }));
+  return last.list.map(m => ({ ...m, win: winChance(m, teamOf, leftFor), settled: settled(m, teamOf, leftFor),
+    meLeft: left(m.meStarters), themLeft: left(m.themStarters) }));
 }
 /** Practice: your starters' simulated points against a made-up opponent. */
 function simMatchups() {
@@ -692,6 +696,17 @@ function loop() {
   const pointsSrc = sim ? sim.points() : pointsShown();
   applySettings();
   ranked = rankAll(games, roster.players, pointsSrc, settings.injuryPause === false ? prefs : { ...prefs, out: { ...prefs.out, ...sidelinedOut() } });   // plus starters injured, until back
+  // Clutch: the games that decide a close matchup count half again (yours with the ball most of all).
+  if (!sim) {
+    const mine = new Set(), theirs = new Set();
+    for (const m of matchupsNow().filter(clutch)) { for (const p of m.meLeft) mine.add(p.team); for (const p of m.themLeft) theirs.add(p.team); }
+    for (const g of ranked) {
+      if (g.state !== 'in') continue;
+      const t = [g.home.abbr, g.away.abbr];
+      if (t.some(x => mine.has(x))) { g.value *= 1.5; g.onField *= 1.5; g.clutch = true; }
+      else if (t.some(x => theirs.has(x))) { g.value *= 1.25; g.clutch = true; }
+    }
+  }
   // What ESPN can't say: the channel on screen went to a commercial (its score bug is gone).
   // No new play for 75 s (a snap comes every ~40 s): a stoppage ESPN didn't name (injury, review, a long ad break).
   for (const g of ranked) {
@@ -721,6 +736,7 @@ function loop() {
   const r = away ? {} : auto.tick(ranked);
   if (r.switchTo) { tune(r.switchTo, r.why); showTicker(); }
   splitCheck();
+  quadCheck(); renderQuad();   // multiview: refill ended games, refresh the labels
   render();
   publish();
 }
@@ -776,6 +792,7 @@ let split = null;   // {game, channel, since}
 const SPLIT_HOT = 0.5;   // a drive this valuable (about one starter in the red zone) counts as hot
 
 function splitCheck() {
+  if (quad) return;   // multiview (2 or 4) has the screen
   if (!native || sim || settings.splitScreen === false || away) { if (split) unsplit(); return; }
   const cur = game(auto.current), now = Date.now();
   if (split) {
@@ -807,6 +824,220 @@ function unsplit() {
   split = null;
   if (native) native.split('');
   document.documentElement.classList.remove('split');
+}
+
+// ---- Multiview (TV app on a powerful box): four games in a 2×2 grid. Top left is the game you were on; the other
+// three are the next best right now (your starters with the ball first). Arrows move the highlight and the sound with
+// it, OK goes full screen on the highlighted game, Back on the top-left one. AutoTune waits while it's up: you're
+// choosing. A game that ends gives its quarter to the next best.
+// Two at once works the same way, side by side (the split screen's layout): the games in the middle band, your fantasy
+// overlay in the space above and below them, which four games don't leave.
+let quad = null;   // {n: 2 or 4, games: [n ids, or null], urls: [3], focus, wasPaused}
+const QUAD_AT = [[0, 0], [960, 0], [0, 540], [960, 540]];   // each quarter's corner on the 1920×1080 page
+const DUO_AT = [[0, 270], [960, 270]];                      // two at once: each half, centred vertically
+const windowAt = i => (quad && quad.n === 2 ? DUO_AT : QUAD_AT)[i];
+
+function quadOrder(have) {
+  const taken = new Set(have.filter(Boolean));
+  // Your starters' games first, the most of them first (whoever has the ball right now), then theirs with the ball,
+  // then by what they're worth, then hearts and favourite teams, then the most exciting.
+  const starters = g => g.players.filter(p => !p.opp && !p.bench && !p.out).reduce((n, p) => n + p.starts, 0);
+  return ranked.filter(g => g.state === 'in' && !taken.has(g.id) && !g.skip && g.hasChannel !== false)
+    .sort((a, b) => starters(b) - starters(a) || (b.onField > 0) - (a.onField > 0) || b.value - a.value || b.fav - a.fav || b.excite - a.excite);
+}
+
+async function startQuad(n = 4) {
+  if (!native || !native.quad || sim) { toast('Multiview needs the TV app with live games'); return; }
+  if (n === 4 && weakTv()) { toast('4 games at once needs a more powerful TV, like an NVIDIA Shield'); return; }
+  const cur = game(auto.current);
+  if (!cur || !iptv) { toast('Multiview: start a game first'); return; }
+  if (quad) exitQuad(null);
+  if (split) unsplit();
+  const others = quadOrder([cur.id]).slice(0, n - 1).map(g => g.id);
+  if (!others.length) { toast('Only one game is on right now'); return; }
+  quad = { n, games: [cur.id, ...others, null, null].slice(0, n), urls: ['', '', ''], focus: 0, wasPaused: auto.paused };
+  auto.setPaused(true);
+  document.documentElement.classList.add(n === 2 ? 'duo' : 'quad');
+  radarOpen = false; $('#radar').classList.remove('on');
+  await quadStreams();
+  native.quadSound(0);
+  renderQuad();
+  if (n === 4) showPuck('', 8e3);   // your scores, a first look
+  toast(`${n} games: ${n === 2 ? '◀ ▶' : 'arrows'} move the sound · OK picks this window's game · Back one game`);
+}
+
+/** Find the channels for the other windows and hand them to the player (one that's unchanged keeps playing). */
+/** A window's channel: a game's (found the usual way), or NFL RedZone's (RZ, a window you can choose too). */
+const RZ = 'redzone';
+async function windowChannel(id) {
+  if (id === RZ) return redZoneChannel();
+  const g = game(id);
+  return g ? iptv.find(g, settings.channelRules || {}) : null;
+}
+
+async function quadStreams() {
+  if (!quad) return;
+  for (let i = 1; i < quad.n; i++) {
+    const id = quad.games[i];
+    let url = '', name = '';
+    try { const ch = await windowChannel(id); url = ch ? ch.url : ''; name = ch ? ch.name : ''; } catch { /* empty window */ }
+    if (!quad) return;   // left while looking
+    quad.urls[i - 1] = url;
+    // Two at once is the split screen's layout and its labels (the overlay stays: there's room above and below).
+    if (quad.n === 2) {
+      split = url ? { game: id, channel: name, since: Date.now(), manual: true } : null;
+      document.documentElement.classList.toggle('split', !!url);
+      native.split(url);
+      renderSplit();
+      return;
+    }
+  }
+  native.quad(JSON.stringify(quad.urls));
+}
+
+/** Back to one game: the one given (full screen), else the top-left one. */
+function exitQuad(to, autoOn) {
+  if (!quad) return;
+  const q = quad;
+  quad = null;
+  native.quadSound(0);   // the sound back on the main picture
+  if (q.n === 2) { split = null; native.split(''); document.documentElement.classList.remove('split'); }
+  else native.quad('');
+  document.documentElement.classList.remove('quad', 'duo');
+  for (const el of document.querySelectorAll('.qlbl')) el.innerHTML = '';
+  auto.setPaused(autoOn ? false : q.wasPaused);   // Full screen: AutoTune back on; Back: as it was before
+  if (to === RZ) watchRedZone();   // RedZone full screen: RedZone the usual way
+  else if (to && to !== auto.current) { const r = auto.pick(to); if (r.switchTo) tune(r.switchTo, r.why); }
+}
+
+/** Every 10 s: a quarter whose game ended (or isn't live) goes to the next best game. */
+let quadCheckedAt = 0;
+function quadCheck() {
+  if (!quad || Date.now() - quadCheckedAt < 10e3) return;
+  quadCheckedAt = Date.now();
+  if (away) { exitQuad(null); return; }
+  // The top-left game ended: the next best takes its window (the main player changes channel, like picking it there).
+  const main = game(quad.games[0]);
+  if (quad.games[0] !== RZ && (!main || main.state !== 'in')) { const next = quadOrder(quad.games)[0]; if (next) { putInWindow(0, next.id); return; } }
+  let changed = false;
+  for (let i = 1; i < quad.n; i++) {
+    const g = game(quad.games[i]);
+    if (quad.games[i] === RZ || (g && g.state === 'in')) continue;   // RedZone stays where you put it
+    const next = quadOrder(quad.games)[0];
+    if ((next && next.id) !== quad.games[i]) { quad.games[i] = next ? next.id : null; changed = true; }
+  }
+  if (changed) quadStreams();
+}
+
+function quadKey(k) {
+  if (quad.pick) { pickKey(k); return; }
+  const f = quad.focus;
+  if (k === 'ArrowLeft' || k === 'ArrowRight') quad.focus = f ^ 1;
+  else if ((k === 'ArrowUp' || k === 'ArrowDown') && quad.n === 4) quad.focus = f ^ 2;
+  else if (k === 'Enter') { openPick(); return; }   // choose what plays in this window
+  else if (k === 'Escape' || k === 'Backspace' || k === 'GoBack') { exitQuad(null); return; }
+  else return;
+  if (!quad.games[quad.focus]) { quad.focus = f; return; }   // an empty quarter: stay
+  native.quadSound(quad.focus);
+  if (quad.n === 4) showPuck('', 8e3);   // moving the outline is a glance at your scores too
+  renderQuad();
+}
+
+// The window's list (OK on it): Full screen first, then every live game; the one playing here is marked. Choosing a
+// game plays it in this window (swapping with the window that has it, if one does); Back closes the list.
+function openPick() {
+  // NFL RedZone too, during its hours, when your channels have it.
+  const rz = redZoneRow() && redZoneChannel() ? [{ rz: true, id: RZ }] : [];
+  const items = [{ full: true }, ...rz, ...ranked.filter(g => g.state === 'in' && g.hasChannel !== false)];
+  const here = items.findIndex(x => x.id && x.id === quad.games[quad.focus]);
+  quad.pick = { items, at: here > 0 ? here : 0 };
+  renderPick();
+}
+
+function pickKey(k) {
+  const p = quad.pick;
+  if (k === 'ArrowDown') p.at = Math.min(p.items.length - 1, p.at + 1);
+  else if (k === 'ArrowUp') p.at = Math.max(0, p.at - 1);
+  else if (k === 'Escape' || k === 'Backspace' || k === 'GoBack') { quad.pick = null; }
+  else if (k === 'Enter') {
+    const it = p.items[p.at], f = quad.focus;
+    quad.pick = null;
+    renderPick();
+    if (it.full) { exitQuad(quad.games[f], true); return; }   // full screen: back to normal, AutoTune on
+    putInWindow(f, it.id);
+  }
+  renderPick();
+}
+
+/** Play game `id` in window f; the window that had it (if any) takes f's old game. */
+async function putInWindow(f, id) {
+  if (!quad || quad.games[f] === id) return;
+  const was = quad.games[f], j = quad.games.indexOf(id);
+  quad.games[f] = id;
+  if (j >= 0) quad.games[j] = was;
+  // The top-left window is the main player (its sound, rewind and clock): it changes channel the usual way.
+  if (f === 0 || j === 0) {
+    const id = quad.games[0];
+    try {
+      const ch = await windowChannel(id);
+      if (ch) { if (id !== RZ) auto.current = id; tunedChannel = ch; playStream(ch.url); }
+    } catch { /* that window keeps what it had */ }
+  }
+  await quadStreams();
+  if (quad) native.quadSound(quad.focus);
+  renderQuad();
+}
+
+function renderPick() {
+  const el = $('#qpick');
+  if (!quad || !quad.pick) { el.classList.remove('on'); return; }
+  const p = quad.pick, first = Math.max(0, Math.min(p.at - 3, p.items.length - 8));
+  const [wx, wy] = windowAt(quad.focus);
+  el.style.left = `${wx + 230}px`; el.style.top = `${wy + 40}px`;
+  el.innerHTML = '<div class="h">WATCH IN THIS WINDOW</div>' + p.items.slice(first, first + 8).map((it, n) => {
+    const i = first + n, sel = i === p.at ? 'sel' : '';
+    if (it.full) return `<div class="it ${sel}"><b>Full screen</b><span>this window's game, on its own</span></div>`;
+    const here = it.id === quad.games[quad.focus], other = !here && quad.games.includes(it.id);
+    if (it.rz) return `<div class="it ${sel}"><b>NFL RedZone</b><span>every touchdown from every game${here ? ' · playing here' : other ? ' · in another window' : ''}</span></div>`;
+    return `<div class="it ${sel}"><b>${esc(it.away.abbr)} ${it.away.score} – ${it.home.score} ${esc(it.home.abbr)}</b><span>${esc(statusLine(it))}${here ? ' · playing here' : other ? ' · in another window' : ''}</span></div>`;
+  }).join('');
+  el.classList.add('on');
+}
+
+// ---- The scores puck (4 games at once): your leagues' scores in a small card at the centre, where the four corners
+// meet (clear of the broadcasts' own score bugs). Up for 6 s when your points change (with what scored), 8 s when the
+// outline moves, and all the time while a matchup is in clutch time.
+let puckUntil = 0, puckNews = '';
+function showPuck(news, ms) {
+  if (news) puckNews = news;
+  puckUntil = Math.max(puckUntil, Date.now() + ms);
+}
+function renderPuck() {
+  const el = $('#qpuck');
+  if (!el) return;
+  const list = quad && quad.n === 4 ? matchupsNow() : [];
+  // Always up in 4-game view (your scores at a glance) unless turned off in the game list; what just scored shows
+  // above them for a few seconds.
+  if (!list.length || !puckOn) { el.classList.remove('on'); return; }
+  if (Date.now() > puckUntil) puckNews = '';
+  // Two leagues at a time, like the scores panel: more than two take turns every 10 s (3 leagues: A+B, then C+A).
+  const pages = Math.ceil(list.length / 2), page = pages > 1 ? Math.floor(Date.now() / 10000) % pages : 0;
+  const shown = pages > 1 ? [list[page * 2], list[(page * 2 + 1) % list.length]] : list;
+  const rows = shown.map(m => {
+    const win = m.win != null ? `${Math.round(m.win * 100)}%` : '';
+    return `<div class="r"><span class="lg">${esc(m.league)}</span><b class="${m.me >= m.them ? 'up' : 'dn'}">${pts(m.me)}</b><span class="v">–</span><b>${pts(m.them)}</b><span class="w ${clutch(m) ? 'cl' : ''}">${clutch(m) ? 'CLUTCH' : win}</span></div>`;
+  }).join('');
+  setHtml(el, (puckNews && Date.now() < puckUntil ? `<div class="news">${esc(puckNews)}</div>` : '') + rows);
+  el.classList.add('on');
+}
+
+/** The outline on the game you're hearing: multiview shows nothing else of ours (the broadcasts have their scores). */
+function renderQuad() {
+  renderPuck();
+  if (!quad) return;
+  const fb = $('#qfocus'), [x, y] = windowAt(quad.focus);
+  fb.style.left = `${x}px`; fb.style.top = `${y}px`;
+  if (quad.n === 2) renderSplit();   // its labels say which side has the sound
 }
 
 // How far behind live the picture plays after a rewind; the tag says so, and Up (or the phone) goes back to live.
@@ -874,14 +1105,18 @@ window.ftvSide = state => { if (state === 'dead' && split) { toast(`${split.chan
 function renderSplit() {
   if (!split) return;
   const label = g => {
+    if (g === RZ) return '<span class="st rz">NFL RedZone</span>';
     if (!g) return '';
     const lead = g.players.find(p => !p.opp && !p.bench && (p.status === 'Red zone' || p.status === 'On field')) || g.players.find(p => !p.opp && !p.bench);
     return `<span class="tb" style="background:${g.away.color}">${esc(g.away.abbr)} ${g.away.score}</span><span class="tb" style="background:${g.home.color}">${esc(g.home.abbr)} ${g.home.score}</span>`
       + `<span class="st ${g.sit && g.sit.redZone ? 'rz' : ''}">${esc(g.sit ? `${g.sit.downDist} · ${g.sit.spot}` : statusLine(g))}</span>`
       + (lead ? `<span class="pl">${esc(lead.pos)} ${esc(lead.short)}</span>` : '');
   };
-  $('#splitL').innerHTML = label(game(auto.current));
-  $('#splitR').innerHTML = label(game(split.game)) + '<span class="mute">MUTED</span>';
+  // MUTED on the side without the sound (2-game multiview moves it with ◀ ▶; the automatic split keeps it left).
+  const right = !!(quad && quad.n === 2 && quad.focus === 1), muted = '<span class="mute">MUTED</span>';
+  const leftId = quad && quad.n === 2 ? quad.games[0] : auto.current, of = id => id === RZ ? RZ : game(id);
+  $('#splitL').innerHTML = label(of(leftId)) + (right ? muted : '');
+  $('#splitR').innerHTML = label(of(split.game)) + (right ? '' : muted);
 }
 
 function stopVideo() {
@@ -924,7 +1159,8 @@ async function pollCommands() {
 }
 
 function handle(c) {
-  if (c.type === 'pick') { leaveRedZone(); const r = auto.pick(c.id); if (r.switchTo) tune(r.switchTo, r.why); }
+  if (c.type === 'pick') { if (quad) exitQuad(null); leaveRedZone(); const r = auto.pick(c.id); if (r.switchTo) tune(r.switchTo, r.why); }
+  else if (c.type === 'quad') { if (quad) exitQuad(null); else startQuad(c.n === 2 || weakTv() ? 2 : 4); }   // the phone's Multiview buttons
   else if (c.type === 'redzone') watchRedZone();
   else if (c.type === 'view') setView(c.v);
   else if (c.type === 'tour') startTour();   // the phone's "Show the remote tour"
@@ -1016,7 +1252,7 @@ function publish() {
   link.publish({
     at: Date.now(), mode: sim ? 'sim' : 'live', screen: [document.documentElement.clientWidth, innerWidth, innerHeight, devicePixelRatio], user: roster.user, teams: roster.teams.map(({ espn, ...t }) => ({ ...t, espn: espn ? { id: espn.id, teamId: espn.teamId } : undefined })), week,   // no ESPN cookies to the phone
     current: auto.current, paused: auto.paused, locked: auto.locked, split: split && split.game, behind,
-    redZone: !!redZone, redZoneOpen: !!redZoneRow(), view,
+    redZone: !!redZone, redZoneOpen: !!redZoneRow(), view, quad: quad ? quad.n : 0, canQuad: !!(native && native.quad && !phone), canQuad4: !!(native && native.quad && !phone && !weakTv()),
     version: native ? native.version() : 'browser', update: update && { versionName: update.versionName, notes: update.notes }, channel: tunedChannel && tunedChannel.name,
     pending: auto.pending && { to: auto.pending.to, endsAt: auto.pending.endsAt, why: auto.pending.why },
     playStats, popupsWaiting: popups.length, ad: { misses: bugMisses, game: bugGame, on: auto.adOn }, readClock, channelDelays: settings.channelDelays || {}, delaySamples, clockChecks, learnedNow, pendingReads: pendingReads.length,
@@ -1122,6 +1358,18 @@ function renderBug(g) {
 // The flame shows for 5 minutes from the moment the run gets there, then goes; it can only come back once the run has
 // cooled off (under 15 in the last 10 minutes) and heated up again.
 const HOT_PTS = 15, HOT_MS = 10 * 60e3, FIRE_SHOW_MS = 5 * 60e3;
+
+// 🔥 on a player's card: on fire right now, 10+ points in the last 15 minutes (real time, as your screen has his
+// points); lit for 3 minutes at least, then out once his last 15 minutes come to less than 10.
+const PFIRE_PTS = 10, PFIRE_MS = 15 * 60e3, PFIRE_MIN_MS = 3 * 60e3;
+const ptsTrail = {}, playerFireUntil = {};   // player id -> [[time, points]], and lit until
+function playerHot(p) {
+  const now = Date.now(), t = (ptsTrail[p.id] ||= []);
+  if (!t.length || t[t.length - 1][1] !== p.pts) t.push([now, p.pts]);
+  while (t.length > 1 && now - t[1][0] > PFIRE_MS) t.shift();   // keep his points as of 15 minutes ago
+  if (p.pts - t[0][1] >= PFIRE_PTS) playerFireUntil[p.id] = Math.max(playerFireUntil[p.id] || 0, now + PFIRE_MIN_MS);
+  return now < (playerFireUntil[p.id] || 0) || p.pts - t[0][1] >= PFIRE_PTS;
+}
 const scoreTrail = {};   // league -> [[time, your points]], the last 10 minutes
 const fireSince = {};    // league -> when its current run turned hot
 function onFire(m) {
@@ -1133,27 +1381,48 @@ function onFire(m) {
   return now - fireSince[m.league] < FIRE_SHOW_MS;
 }
 
+/**
+ * Clutch mode: a matchup still in doubt (15–85% to win) with 4 or fewer starters left to play between you and your
+ * opponent. Its badge shows the margin and who's left, and AutoTune favors the games those players are in.
+ */
+const clutch = m => settings.clutch !== false && m.win != null && m.win > 0.15 && m.win < 0.85 && m.meLeft && m.themLeft
+  && m.meLeft.length + m.themLeft.length > 0 && m.meLeft.length + m.themLeft.length <= 4;
+
+const QR_EVERY_MS = 60e3, QR_FOR_MS = 10e3;   // each minute: the scores 50 s, the QR code 10 s
+let qrSrc = '';   // the phone remote's QR code as an image, once pairCode has drawn it
+
 function renderMatchups() {
   const list = matchupsNow();
   $('#mu').style.display = list.length && settings.showMatchups !== false ? '' : 'none';
   // Two fit; with more leagues, the next two every 10 seconds. Always two to a page: with an odd number of leagues the
   // last page wraps round to the first (3 leagues: A+B, C+A).
-  const pages = Math.ceil(list.length / 2), page = pages > 1 ? Math.floor(Date.now() / 10000) % pages : 0;
+  const pages = Math.ceil(list.length / 2);
+  // Each minute, 10 s of it: the QR code for the phone remote, and what it's for (Settings: off with "QR reminder").
+  const qrNow = qrSrc && !phone && settings.qrReminder !== false && Date.now() % QR_EVERY_MS < QR_FOR_MS;
+  const page = qrNow ? 'qr' : pages > 1 ? Math.floor(Date.now() / 10000) % pages : 0;
   const hot = new Set(list.filter(onFire).map(m => m.league));   // every league's run is followed, shown or not
   const mu = $('#mu'), prev = mu.querySelector('.pg:not(.out)');
   const shown = pages > 1 ? [list[page * 2], list[(page * 2 + 1) % list.length]] : list;
-  const html = '<div class="pg">' + shown.map(m => {
+  const html = qrNow ? `<div class="pg qrpg"><img src="${qrSrc}" alt=""><div><b>YOUR PHONE IS THE REMOTE</b>
+      <span>Scan with your phone's camera to change alerts, your streams and channels, leagues and AutoTune</span>
+      <small>Anytime: press ▼, the code is at the bottom of the game list</small></div></div>`
+    : '<div class="pg">' + shown.map(m => {
     const share = m.me / Math.max(0.01, m.me + m.them) * 100;
     // The bar is your live chance of winning (the number on the right of the league name), not the points split.
     const win = m.win != null ? Math.round(m.win * 100) : Math.round(m.me + m.them > 0 ? share : 50);
     // 5. Settled either way says so (the win chance shows how close the rest are).
     // CLINCHED only when it's settled for real (a 99% forecast at 1 o'clock isn't); practice has no settled, it goes by the chance.
     const won = 'settled' in m ? m.settled === 'won' : win >= 99, lost = 'settled' in m ? m.settled === 'lost' || win < 1 : win <= 1;
-    const badge = m.win != null && won ? ['clinch', 'CLINCHED'] : m.win != null && lost ? ['miracle', 'NEED A MIRACLE'] : [win >= 50 ? 'up' : 'down', `${win}% WIN`];
+    // Clutch: still in doubt with 4 or fewer starters left between you: the margin and who's left decide it.
+    const c = clutch(m), gap = Math.abs(m.me - m.them).toFixed(1);
+    const badge = m.win != null && won ? ['clinch', 'CLINCHED'] : m.win != null && lost ? ['miracle', 'NEED A MIRACLE']
+      : c ? ['clutch', `${m.me >= m.them ? 'UP' : 'DOWN'} ${gap} · ${m.meLeft.length} v ${m.themLeft.length} LEFT`]
+      : [win >= 50 ? 'up' : 'down', `${win}% WIN`];
+    const who = c ? `<div class="cl"><b>You:</b> ${esc(m.meLeft.map(p => p.name).join(', ') || 'nobody left')} · <b>Them:</b> ${esc(m.themLeft.map(p => p.name).join(', ') || 'nobody left')}</div>` : '';
     return `<div><div class="lg">${esc(m.league.toUpperCase())}<b class="wp ${badge[0]}">${badge[1]}</b></div>
       <div class="ln"><span class="a">${esc(m.team)}</span><span class="s ${m.me >= m.them ? 'win' : 'lose'}"><span class="n">${hot.has(m.league) ? '<i class="fire" title="15+ points in 10 minutes">🔥</i>' : ''}${rollHtml('me:' + m.league, m.me, false)}</span></span><span class="v">vs</span>
         <span class="s ${m.them > m.me ? 'win' : 'lose'}">${rollHtml('them:' + m.league, m.them, false)}</span><span class="b">${esc(m.opp)}</span>
-        <div class="bar">${rollBar('win:' + m.league, win)}</div></div></div>`;
+        <div class="bar">${rollBar('win:' + m.league, win)}</div></div>${who}</div>`;
   }).join('') + '</div>';
   // A new page scrolls up: the old one rolls out the top (kept for its 0.8 s) with the new one right behind it.
   const turned = renderMatchups.page !== undefined && renderMatchups.page !== page;
@@ -1185,7 +1454,7 @@ function renderRail(g) {
     return `<div data-pid="${esc(p.id)}" class="card ${i === 0 && !p.game ? 'lead' : ''} ${p.bench ? 'bench' : ''} ${p.game ? 'away' : ''} ${hitAge < 10000 ? (hit.td ? 'hit td' : 'hit') : ''}" ${hitAge < 10000 ? `data-hit="${hit.at}" style="--hit:${hit.color}"` : ''}>
       ${hitAge < 10000 ? `<i class="fx"></i>${hit.td ? '<i class="fx b"></i>' : ''}` : ''}
       ${p.espn ? `<img class="hs" src="https://a.espncdn.com/i/headshots/nfl/players/full/${p.espn}.png" alt="" onerror="this.remove()">` : ''}
-      ${p.pts >= 20 ? '<i class="fire corner" title="20+ points today">🔥</i>' : ''}
+      ${playerHot(p) ? '<i class="fire corner" title="10+ points in the last 15 minutes">🔥</i>' : ''}
       <div class="nm">${i === 0 && !p.game ? HEART(g.fav) : ''}${esc(p.short)} <span class="pos">${p.pos}</span>${p.teams > 1 ? `<span class="pos" title="on ${p.teams} of your teams">×${p.teams}</span>` : ''}</div>
       <div class="st ${cls}">${hitAge < 10000 && hit.td ? '<span class="tdtag">TOUCHDOWN</span>' : `${where}${p.status ? '● ' + p.status : ''}${p.bench ? ' · bench' : ''}`}</div>
       <div class="p"><b>${rollHtml(p.id, p.pts, hitAge > 120e3)}${hitAge < 10000 ? `<i class="gain big">+${pts(hit.pts)}</i>` : ''}</b><small>${pts(p.proj)} proj</small></div>
@@ -1380,9 +1649,9 @@ function setView(v, quiet) {
   if (!quiet) toast(`On screen: ${VIEW_NAME[v]}${v === 'full' ? '' : ` · change it in All Games (${phone ? '☰' : '▼'})`}`);
   if (radarOpen) renderRadar();
 }
-const cycleView = () => setView(VIEWS[(VIEWS.indexOf(view) + 1) % VIEWS.length]);
-// The first row a freshly opened game list points at: past the On screen row, so ▼ then OK still watches the top game.
-const firstRow = () => Math.max(0, radarList().findIndex(r => !r.view));
+const cycleView = (step = 1) => setView(VIEWS[(VIEWS.indexOf(view) + step + VIEWS.length) % VIEWS.length]);   // OK or ▶ next, ◀ back
+// The first row a freshly opened game list points at: past the On Screen Overlay row, so ▼ then OK still watches the top game.
+const firstRow = () => Math.max(0, radarList().findIndex(r => !r.view && !r.mv && !r.mvs));   // the first game, past On Screen Overlay and Multiview
 applyView();
 if (view === 'clean') { viewHeld = auto.paused; auto.setPaused(true); }   // opened in Clean: it stays put
 // At 6:45 RedZone signs off: back to AutoTune's best game.
@@ -1402,11 +1671,22 @@ function radarList() {
   const up = update && !installing && native ? { upd: true, id: 'update' } : null;
   // Last: this version, and OK to look for a newer one now.
   const chk = native && !up ? [{ chk: true, id: 'check' }] : [];
-  return [...(up ? [up] : []), { view: true, id: 'view' }, ...(rz ? [rz] : []), ...live.filter(mine), ...live.filter(g => !mine(g)), ...ranked.filter(g => g.state === 'pre'), ...chk];
+  // Under On screen: Multiview, 2 or 4 games at once (two or more live).
+  const mv = native && native.quad && !phone && live.length > 1 ? [{ mv: true, id: 'multiview' }] : [];   // 2 games anywhere, 4 on a powerful TV
+  if (mv.length && mvChoice === 4 && !weakTv()) mv.push({ mvs: true, id: 'puck' });   // with 4: scores on or off
+  return [...(up ? [up] : []), { view: true, id: 'view' }, ...mv, ...(rz ? [rz] : []), ...live.filter(mine), ...live.filter(g => !mine(g)), ...ranked.filter(g => g.state === 'pre'), ...chk];
 }
 const RADAR_ROWS = 5;   // shown at once; the list scrolls with the focus
 const DOUBLE_OK_MS = 350;   // OK twice within this hearts a game in the list; once watches it after it
 let okWait = null;          // {id, t}: a first OK on a game, waiting to see if a second one comes
+let mvChoice = 2;           // the Multiview row: 2 or 4 games (◀ ▶ on it)
+// The scores puck in 4-game view, on or off (the row under Multiview when 4 games is chosen); remembered on this TV.
+let puckOn = true;
+try { puckOn = localStorage.getItem('ftv.puck') !== 'off'; } catch { /* on */ }
+function togglePuck() {
+  puckOn = !puckOn;
+  try { localStorage.setItem('ftv.puck', puckOn ? 'on' : 'off'); } catch { /* this session only */ }
+}
 
 function renderRadar() {
   const list = radarList();
@@ -1416,13 +1696,21 @@ function renderRadar() {
   setHtml($('#radar .list'), list.slice(first, first + RADAR_ROWS).map((g, j) => {
     const i = first + j;
     if (g.view) return `<div data-i="${i}" class="rg viewrow ${i === radarFocus ? 'focus' : ''}">
-      <div class="top"><span>On screen</span><span class="vw">${VIEW_NAME[view]}</span></div>
+      <div class="top"><span>On Screen Overlay</span><span class="vw">${VIEW_NAME[view]}</span></div>
       <div class="sub">${VIEWS.map(v => `<span class="${v === view ? 'on' : ''}">${VIEW_NAME[v]}</span>`).join(' · ')}</div>
-      <div class="pl"><span class="muted">${phone ? 'Tap' : 'OK'} to switch</span></div></div>`;
+      <div class="pl"><span class="muted">${phone ? 'Tap to switch' : '◀ ▶ or OK to switch'}</span></div></div>`;
     if (g.upd) return `<div data-i="${i}" class="rg ${i === radarFocus ? 'focus' : ''}">
       <div class="top"><span class="tag" style="background:var(--lime);color:#04222a">NEW</span><span>Update FantasyTV</span></div>
       <div class="sub">Version ${esc(update.versionName)}${update.notes ? ` · ${esc(update.notes)}` : ''}</div>
       <div class="pl"><span class="muted">OK to install now</span></div></div>`;
+    if (g.mv) { const four = !weakTv(), n = four ? mvChoice : 2;
+      return `<div data-i="${i}" class="rg viewrow ${i === radarFocus ? 'focus' : ''}">
+      <div class="top"><span>Multiview</span><span class="vw">${n} games</span></div>
+      <div class="sub"><span class="${n === 2 ? 'on' : ''}">2 games</span>${four ? ` · <span class="${n === 4 ? 'on' : ''}">4 games</span>` : ''}</div>
+      <div class="pl"><span class="muted">${four ? '◀ ▶ choose · ' : ''}OK: start with this game and the best right now</span></div></div>`; }
+    if (g.mvs) return `<div data-i="${i}" class="rg viewrow ${i === radarFocus ? 'focus' : ''}">
+      <div class="top"><span>4-game scores</span><span class="vw">${puckOn ? 'On' : 'Off'}</span></div>
+      <div class="pl"><span class="muted">Your league scores in the middle of 4 games · OK: ${puckOn ? 'hide' : 'show'}</span></div></div>`;
     if (g.chk) return `<div data-i="${i}" class="rg ${i === radarFocus ? 'focus' : ''}">
       <div class="top"><span>FantasyTV ${esc(native.version())}</span></div>
       <div class="pl"><span class="muted">${phone ? 'Tap' : 'OK'} to check for updates</span></div></div>`;
@@ -1813,6 +2101,11 @@ function showPopups() {
       if (now < airs) { p.showAt = airs; popups.push(p); continue; }
     }
     playStats.shown++;
+    // 4 games at once: no popups or banners over the games; your points show in the scores puck at the centre instead.
+    if (quad && quad.n === 4) {
+      if (p.who && !p.kind && !p.bench) showPuck(`${p.td ? 'TD ' : ''}+${pts(p.pts)} ${p.who.short}`, 6e3);
+      continue;
+    }
     // Clean: nothing at all. Scores only: the small popups your Alerts setting allows, never the big effects.
     if (view === 'clean') continue;
     // The game you're watching never gets a popup: you saw the play (or the injury, or the swing it caused).
@@ -1900,6 +2193,8 @@ async function pairCode() {
   for (const el of document.querySelectorAll('.pairUrl')) el.textContent = url.replace(/^https?:\/\//, '');
   if (!window.QRCode) return;
   for (const el of [$('#qr'), $('#idleQr')]) if (!el.children.length) new QRCode(el, { text: code, width: 120, height: 120, colorDark: '#000', colorLight: '#fff' });
+  const c = $('#qr canvas');   // the same code for the scores panel's reminder
+  if (c) try { qrSrc = c.toDataURL(); } catch { /* no reminder */ }
   if (!$('#setupQr').children.length) new QRCode($('#setupQr'), { text: code, width: 260, height: 260, colorDark: '#000', colorLight: '#fff' });
 }
 
@@ -1911,8 +2206,8 @@ const TOUR = [
     text: 'AutoTune switches to the game that matters most to your lineup. Press Up to stay where you are; Up again turns it back on. Before a switch, a 5 second countdown shows: OK or Back cancels it.' },
   { key: '▼', target: '#radar', radar: true, right: true, title: 'Down: every game',
     text: 'All the live games, yours first. Up and Down move, OK watches a game, ▶ (or OK twice) hearts it (AutoTune favors hearted games in close calls), Back closes the list. A game you pick stays on for 45 seconds (less if it goes to a commercial), then AutoTune takes over again. To stay on it, turn AutoTune off with Up.' },
-  { key: 'OK', target: '#radar .viewrow', radar: true, right: true, title: "Top of the list: what's on screen",
-    text: "OK on the On screen row switches what sits over the game. Full: everything. Scores only: just your leagues' scores, with small popups for your big plays (NFL RedZone switches to it by itself). Clean: nothing but the game, and AutoTune stays put. The phone remote has the same switch." },
+  { key: 'OK', target: '#radar .viewrow', radar: true, right: true, title: "Top of the list: On Screen Overlay",
+    text: "◀ ▶ or OK on the On Screen Overlay row switch what sits over the game. Full: everything. Scores only: just your leagues' scores, with small popups for your big plays (NFL RedZone switches to it by itself). Clean: nothing but the game, and AutoTune stays put. The phone remote has the same switch." },
   { key: '◀ ▶', target: '#bug .in', title: 'Left: rewind · Right: live',
     text: 'Left jumps back 10 seconds in the game you\'re watching (again for more, up to a minute). Right goes back to live. Only the game on screen can be rewound: FantasyTV keeps its last minute from when you tuned in.' },
   { key: 'OK', target: '#pops .demo', demo: 1, title: 'OK on a popup',
@@ -1995,10 +2290,10 @@ setInterval(() => {
 }, 2000);
 
 // ---- TV remote keys: arrows, OK (Enter), Back (Escape/Backspace), P to pause. The TV app sends them through
-// ftvKey; Back only comes here while All Games is open or a switch is counting down (Android.setBack).
+// ftvKey; Back only comes here while All Games is open, a switch is counting down or multiview is up (Android.setBack).
 addEventListener('keydown', onKey);
 window.ftvKey = key => onKey({ key, repeat: false, preventDefault() {} });
-setInterval(() => native && native.setBack(tour.on || radarOpen || settingsOpen || !!auto.pending || Date.now() < updateCardUntil), 250);
+setInterval(() => native && native.setBack(!!quad || tour.on || radarOpen || settingsOpen || !!auto.pending || Date.now() < updateCardUntil), 250);
 
 function onKey(e) {
   const k = e.key;
@@ -2010,6 +2305,7 @@ function onKey(e) {
     if (k === 'Enter' && native && native.canInstall && !native.canInstall()) native.allowInstalls();
     return;
   }
+  if (quad) { quadKey(k); e.preventDefault(); return; }   // multiview has the keys while it's up
   if (auto.pending && (k === 'Enter' || k === 'Escape' || k === 'Backspace')) { auto.cancel(); loop(); e.preventDefault(); return; }
   // The update card: OK installs, Back puts it off.
   if (Date.now() < updateCardUntil && (k === 'Enter' || k === 'Escape' || k === 'Backspace')) {
@@ -2044,8 +2340,12 @@ function onKey(e) {
   const list = radarList();
   if (k === 'ArrowDown') radarFocus = Math.min(list.length - 1, radarFocus + 1);
   else if (k === 'ArrowUp') radarFocus = Math.max(0, radarFocus - 1);
-  else if (k === 'ArrowRight' && list[radarFocus] && !list[radarFocus].redzone && !list[radarFocus].upd && !list[radarFocus].view && !list[radarFocus].chk) handle({ type: 'heart', id: list[radarFocus].id });
+  else if (k === 'ArrowRight' && list[radarFocus] && !list[radarFocus].redzone && !list[radarFocus].upd && !list[radarFocus].view && !list[radarFocus].chk && !list[radarFocus].mv && !list[radarFocus].mvs) handle({ type: 'heart', id: list[radarFocus].id });
   else if (k === 'Enter' && list[radarFocus] && list[radarFocus].chk) handle({ type: 'checkUpdate' });   // the list stays open
+  else if ((k === 'ArrowLeft' || k === 'ArrowRight') && list[radarFocus] && list[radarFocus].mv) { if (!weakTv()) mvChoice = mvChoice === 2 ? 4 : 2; }
+  else if ((k === 'ArrowLeft' || k === 'ArrowRight') && list[radarFocus] && list[radarFocus].view) cycleView(k === 'ArrowRight' ? 1 : -1);   // On screen: ◀ ▶ like Multiview
+  else if (k === 'Enter' && list[radarFocus] && list[radarFocus].mv) startQuad(weakTv() ? 2 : mvChoice);
+  else if (k === 'Enter' && list[radarFocus] && list[radarFocus].mvs) togglePuck();   // the list stays open
   else if (k === 'Enter' && list[radarFocus] && list[radarFocus].view) cycleView();   // the list stays open to switch again
   else if (k === 'Enter' && list[radarFocus] && !list[radarFocus].upd && !list[radarFocus].redzone) {
     // A game: OK twice quickly hearts it (like ▶) and stays in the list; once watches it, after a moment's wait for

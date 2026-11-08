@@ -270,8 +270,8 @@ const TOUR = [
     text: 'AutoTune switches to the game that matters most to your lineup. Press Up to stay where you are; Up again turns it back on. Before a switch, a 5 second countdown shows: OK or Back cancels it.' },
   { key: '▼', target: '#radar', radar: true, right: true, title: 'Down: every game',
     text: 'All the live games, yours first. Up and Down move, OK watches a game, ▶ (or OK twice) hearts it (AutoTune favors hearted games in close calls), Back closes the list. A game you pick stays on for 45 seconds (less if it goes to a commercial), then AutoTune takes over again. To stay on it, turn AutoTune off with Up.' },
-  { key: 'OK', target: '#radar .viewrow', radar: true, right: true, title: "Top of the list: what's on screen",
-    text: "OK on the On screen row switches what sits over the game. Full: everything. Scores only: just your leagues' scores, with small popups for your big plays (NFL RedZone switches to it by itself). Clean: nothing but the game, and AutoTune stays put. The phone remote has the same switch." },
+  { key: 'OK', target: '#radar .viewrow', radar: true, right: true, title: "Top of the list: On Screen Overlay",
+    text: "◀ ▶ or OK on the On Screen Overlay row switch what sits over the game. Full: everything. Scores only: just your leagues' scores, with small popups for your big plays (NFL RedZone switches to it by itself). Clean: nothing but the game, and AutoTune stays put. The phone remote has the same switch." },
   { key: '◀ ▶', target: '#bug .in', title: 'Left: rewind · Right: live',
     text: 'Left jumps back 10 seconds in the game you\'re watching (again for more, up to a minute). Right goes back to live. Only the game on screen can be rewound: FantasyTV keeps its last minute from when you tuned in.' },
   { key: 'OK', target: '#pops .demo', demo: 1, title: 'OK on a popup',
@@ -292,7 +292,7 @@ const RADAR = [
   { cls: '', sig: 2, a: 'ATL', sc: '10–13', h: 'TB', sub: 'Halftime', pl: [['B. Robinson', 'RB', 'muted', 'Off field', '12.7']], ch: 'FOX 2' },
 ];
 function drawRadar() {
-  document.querySelector('#radar .list').innerHTML = '<div class="rg viewrow"><div class="top"><span>On screen</span><span class="vw">Full</span></div><div class="sub"><span class="on">Full</span> · Scores only · Clean</div></div>' + RADAR.map(g => `<div class="rg ${g.cls}">
+  document.querySelector('#radar .list').innerHTML = '<div class="rg viewrow"><div class="top"><span>On Screen Overlay</span><span class="vw">Full</span></div><div class="sub"><span class="on">Full</span> · Scores only · Clean</div></div>' + RADAR.map(g => `<div class="rg ${g.cls}">
     <div class="top">${bars(g.sig)}<span>${g.a}</span><span class="sc">${g.sc}</span><span>${g.h}</span>${HEART(g.fav)}</div>
     <div class="sub">${g.sub}</div>
     ${g.pl.map(([n, pos, c, st, p]) => `<div class="pl"><span>${n} <span class="muted">${pos}</span></span><span><span class="${c}">${st}</span> ${p}</span></div>`).join('')}

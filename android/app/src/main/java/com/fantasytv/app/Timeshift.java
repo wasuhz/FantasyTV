@@ -23,9 +23,63 @@ final class Timeshift {
     // largeHeap): a high-bitrate feed then rewinds less far instead of running the app out of memory.
     private static final long MAX_BYTES = Math.min(120L << 20, Runtime.getRuntime().maxMemory() / 3);
 
+    /** keyAt: where in the chunk a video keyframe (a whole picture) starts, or -1: a player may only start there. */
     private static final class Chunk {
-        final long t; final byte[] data; final long seq;
-        Chunk(long t, byte[] data, long seq) { this.t = t; this.data = data; this.seq = seq; }
+        final long t; final byte[] data; final long seq; final int keyAt;
+        Chunk(long t, byte[] data, long seq, int keyAt) { this.t = t; this.data = data; this.seq = seq; this.keyAt = keyAt; }
+    }
+
+    // ---- Where a player can start. Video comes as a whole picture (a keyframe) every second or two, then changes to
+    // it; started anywhere else the decoder has nothing to apply them to (green blocks, a frozen smear) until the next
+    // one, or for good. So a player starts at a keyframe, after the stream's table of contents (PAT and PMT, which say
+    // which packets are video and audio; without them it can't read anything).
+    private static final int TS = 188;
+    private byte[] pat, pmt;     // the latest table of contents
+    private int pmtPid = -1;
+
+    private static int pid(byte[] d, int i) { return ((d[i + 1] & 0x1f) << 8) | (d[i + 2] & 0xff); }
+    /** Where the packet's payload starts (past its adaptation field), or -1 if it has none. */
+    private static int payload(byte[] d, int i) {
+        int afc = (d[i + 3] >> 4) & 3;
+        if ((afc & 1) == 0) return -1;
+        int p = i + 4 + ((afc & 2) != 0 ? 1 + (d[i + 4] & 0xff) : 0);
+        return p < i + TS ? p : -1;
+    }
+
+    /** Note the table of contents and find a video keyframe in this chunk: its packet's offset, or -1. */
+    private int scan(byte[] d) {
+        int key = -1;
+        for (int i = 0; i + TS <= d.length; i += TS) {
+            if (d[i] != 0x47) return key;   // not aligned: give up on this chunk
+            boolean start = (d[i + 1] & 0x40) != 0;
+            int pid = pid(d, i), p = payload(d, i);
+            if (!start || p < 0) continue;
+            if (pid == 0) {   // PAT: the first program's PMT
+                pat = java.util.Arrays.copyOfRange(d, i, i + TS);
+                int s = p + 1 + (d[p] & 0xff);
+                for (int e = s + 8; e + 4 <= i + TS && e + 4 <= s + 3 + (((d[s + 1] & 0x0f) << 8) | (d[s + 2] & 0xff)) - 4; e += 4) {
+                    int prog = ((d[e] & 0xff) << 8) | (d[e + 1] & 0xff);
+                    if (prog != 0) { pmtPid = ((d[e + 2] & 0x1f) << 8) | (d[e + 3] & 0xff); break; }
+                }
+            } else if (pid == pmtPid) {
+                pmt = java.util.Arrays.copyOfRange(d, i, i + TS);
+            } else if (key < 0 && p + 9 < i + TS && d[p] == 0 && d[p + 1] == 0 && d[p + 2] == 1 && (d[p + 3] & 0xf0) == 0xe0) {
+                // A video PES: a keyframe if the adaptation field says "random access", or its first pictures are one.
+                boolean rai = ((d[i + 3] >> 4) & 2) != 0 && (d[i + 4] & 0xff) > 0 && (d[i + 5] & 0x40) != 0;
+                if (rai || keyNal(d, p + 9 + (d[p + 8] & 0xff), i + TS)) key = i;
+            }
+        }
+        return key;
+    }
+
+    /** An H.264 IDR or SPS, or an HEVC IRAP or parameter set, among the NAL units starting in d[from, to). */
+    private static boolean keyNal(byte[] d, int from, int to) {
+        for (int j = from; j + 3 < to; j++) {
+            if (d[j] != 0 || d[j + 1] != 0 || d[j + 2] != 1) continue;
+            int b = d[j + 3] & 0xff, h264 = b & 0x1f, hevc = (b >> 1) & 0x3f;
+            if (h264 == 5 || h264 == 7 || (hevc >= 16 && hevc <= 21) || hevc == 32 || hevc == 33) return true;
+        }
+        return false;
     }
 
     private final ArrayDeque<Chunk> chunks = new ArrayDeque<>();
@@ -104,7 +158,7 @@ final class Timeshift {
 
     private synchronized void add(byte[] data) {
         long now = System.currentTimeMillis();
-        chunks.addLast(new Chunk(now, data, nextSeq++));
+        chunks.addLast(new Chunk(now, data, nextSeq++, scan(data)));
         bytes += data.length;
         while (!chunks.isEmpty() && (now - chunks.getFirst().t > KEEP_MS || bytes > MAX_BYTES)) bytes -= chunks.removeFirst().data.length;
         notifyAll();
@@ -114,22 +168,42 @@ final class Timeshift {
      * Send the channel from `secondsBack` ago (0 = live) and keep following, until the client goes away or the
      * channel changes. Blocking: on the server's request thread.
      */
+    /** The newest chunk at or before `t` that holds a keyframe, or null. */
+    private Chunk lastKey(long t) {
+        Chunk found = null;
+        for (Chunk ch : chunks) { if (ch.t > t) break; if (ch.keyAt >= 0) found = ch; }
+        return found;
+    }
+
     void serve(OutputStream out, int secondsBack) throws IOException {
         String mine;
         long seq, myEpoch;
+        byte[] head = null;   // the first chunk's part from its keyframe on, after the table of contents
         synchronized (this) {
             mine = url;
             myEpoch = epoch;
-            // Wait briefly for the first data of a fresh channel.
-            long until = System.currentTimeMillis() + 10_000;
-            while (chunks.isEmpty() && running && System.currentTimeMillis() < until) {
-                try { wait(500); } catch (InterruptedException e) { return; }
+            // Wait for the first keyframe of a fresh channel (a few seconds at most), else make do with what's there.
+            long until = System.currentTimeMillis() + 10_000, keyUntil = System.currentTimeMillis() + 6_000;
+            while (running && System.currentTimeMillis() < until && (chunks.isEmpty() || (lastKey(Long.MAX_VALUE) == null && System.currentTimeMillis() < keyUntil))) {
+                try { wait(300); } catch (InterruptedException e) { return; }
             }
             if (chunks.isEmpty()) return;
-            long from = System.currentTimeMillis() - secondsBack * 1000L;
-            seq = chunks.getLast().seq;   // live: the newest chunk
-            if (secondsBack > 0) for (Chunk ch : chunks) if (ch.t >= from) { seq = ch.seq; break; }
+            // Live: the newest keyframe; rewound: the last keyframe at or before that moment (else the oldest kept).
+            long from = secondsBack > 0 ? System.currentTimeMillis() - secondsBack * 1000L : Long.MAX_VALUE;
+            Chunk k = lastKey(from);
+            if (k == null && secondsBack > 0) k = chunks.getFirst();
+            if (k == null) { seq = chunks.getLast().seq; }   // no keyframe found at all: as before
+            else {
+                seq = k.seq + 1;
+                int at = Math.max(0, k.keyAt);
+                java.io.ByteArrayOutputStream h = new java.io.ByteArrayOutputStream(k.data.length + 2 * TS);
+                if (pat != null && pmt != null) { h.write(pat, 0, TS); h.write(pmt, 0, TS); }
+                h.write(k.data, at, k.data.length - at);
+                head = h.toByteArray();
+            }
         }
+        Log.i(TAG, "player starts " + (head == null ? "at the newest data (no keyframe found)" : "at a keyframe " + (seq - 1 < 0 ? 0 : 1) + ", " + head.length / 1024 + " KB in hand") + (pat != null && pmt != null ? ", with PAT/PMT" : ", no PAT/PMT yet"));
+        if (head != null) { out.write(head); out.flush(); }
         while (true) {
             List<byte[]> batch = new ArrayList<>();
             synchronized (this) {

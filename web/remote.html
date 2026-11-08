@@ -217,7 +217,8 @@
     <button class="ib" id="gear" aria-label="Settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button></div>
   <div class="at"><div style="flex:1"><b>AUTOTUNE</b><br><small id="atText">Waiting for the TV…</small></div><button class="switch" id="atSwitch" aria-label="AutoTune"></button></div>
   <button type="button" class="watch" id="rzBtn" hidden style="width:100%;margin:8px 0 0;background:none;border-color:var(--red);color:var(--text)">WATCH NFL REDZONE</button>
-  <div class="views" id="views"><span>ON SCREEN</span><button type="button" data-view="full">Full</button><button type="button" data-view="scores">Scores only</button><button type="button" data-view="clean">Clean</button></div>
+  <div class="views" id="mvRow" hidden style="margin-top:8px"><span>MULTIVIEW</span><button type="button" data-mv="2">2 games</button><button type="button" data-mv="4" id="mv4">4 games</button><button type="button" data-mv="0" id="mvOff">Back to one game</button></div>
+  <div class="views" id="views"><span>OVERLAY</span><button type="button" data-view="full">Full</button><button type="button" data-view="scores">Scores only</button><button type="button" data-view="clean">Clean</button></div>
   <div class="rw"><button data-rw="10">⏪ 10s</button><button data-rw="30">⏪ 30s</button><span id="rwText"></span><button data-rw="0" class="live">LIVE</button></div>
 </header>
 <div class="pending" id="pending"><div class="t"><small>SWITCHING TO</small><span id="pTo"></span></div><span class="s" id="pSecs"></span><button id="pCancel">CANCEL</button></div>
@@ -275,9 +276,11 @@
     </div>
 
     <div class="card">
-      <div class="section">ON SCREEN</div>
+      <div class="section">ON SCREEN OVERLAY</div>
       <label class="chk">Matchup scores on the TV (you vs your opponent, each league)<input type="checkbox" name="showMatchups"></label>
       <label class="chk">NFL RedZone switches to Scores only (your leagues' scores, no player cards or clock)<input type="checkbox" name="rzScores"></label>
+      <label class="chk">QR reminder: each minute, the phone remote's code takes the scores' place for 10 seconds<input type="checkbox" name="qrReminder"></label>
+      <label class="chk">Clutch mode: a close matchup with 4 or fewer players left shows the margin and who's left, and AutoTune favors their games<input type="checkbox" name="clutch"></label>
       <label class="chk">Hide spoilers on this phone<input type="checkbox" name="hideSpoilers"></label>
       <small>The game on the TV shows no score or points here, since your phone is ahead of the stream.</small>
       <label>Favorite teams (their games always count as hearted)<input name="favTeams" placeholder="NO, DAL" autocapitalize="characters"></label>
@@ -507,6 +510,10 @@ function draw() {
   for (const b of document.querySelectorAll('#views button')) b.classList.toggle('on', b.dataset.view === (s.view || 'full'));
   const cur = s.games.find(g => g.id === s.current);
   document.getElementById('rzBtn').hidden = !s.redZoneOpen || s.redZone;
+  // Multiview: 2 games, or 4 on a TV that can play them, with two or more live; while it's on, the way back.
+  const mvRow = document.getElementById('mvRow');
+  mvRow.hidden = !s.canQuad || (!s.quad && (s.games || []).filter(g => g.state === 'in').length < 2);
+  for (const b of mvRow.querySelectorAll('[data-mv]')) b.hidden = s.quad ? b.dataset.mv !== '0' : b.dataset.mv === '0' || (b.dataset.mv === '4' && !s.canQuad4);
   if (!cfg.sleeper && !s.user) document.getElementById('atText').textContent = 'Finish setup: Settings, then SAVE TO TV.';
   else if (s.redZone) document.getElementById('atText').textContent = 'Watching NFL RedZone. AutoTune waits until you pick a game.';
   else document.getElementById('atText').textContent = s.paused ? 'Paused. Stays off until you turn it back on.'
@@ -577,6 +584,7 @@ document.addEventListener('click', e => {
 // Rewind the channel on the TV (it keeps the last minute); LIVE goes back.
 for (const b of document.querySelectorAll('[data-rw]')) b.onclick = () => { link.send({ type: 'rewind', seconds: +b.dataset.rw }); setTimeout(refresh, 600); };
 document.getElementById('rzBtn').onclick = () => { link.send({ type: 'redzone' }); setTimeout(refresh, 600); };
+for (const b of document.querySelectorAll('#mvRow [data-mv]')) b.onclick = () => { link.send({ type: 'quad', n: +b.dataset.mv }); setTimeout(refresh, 800); };
 document.getElementById('tourBtn').onclick = () => link.send({ type: 'tour' });   // replays the first-launch remote tour
 document.getElementById('views').addEventListener('click', e => {
   const b = e.target.closest('[data-view]');
@@ -591,7 +599,7 @@ document.getElementById('pCancel').onclick = () => { link.send({ type: 'cancel' 
 // Settings live on the TV (/api/config); saving restarts the TV page with them.
 const form = document.getElementById('settings');
 const DEFAULTS = { sleeper: '', mode: 'live', delay: 30, rzScores: true, cooldown: 75, iptvBase: '', xtServer: '', xtUser: '', xtPass: '', stalkerPortal: '', stalkerMac: '', iptvSource: 'auto',
-  hideSpoilers: true, showOpp: false, lookahead: true, injuryPause: true, pointsPopups: true, benchPlays: true, swingAlerts: true, dangerAlerts: true, injuryAlerts: true, popupTiming: 'now', popupDelay: 25, autoUpdate: true, splitScreen: true, showMatchups: true, oppWeight: 0, favTeams: '', blackout: '', skipLeagues: [], tracked: [], espnLeagues: [], bugSamples: false, perf: 'auto', tunePreset: 'balanced', alertsPreset: 'all', popupMin: 0, tdHere: 'full', tdAway: 'full' };
+  hideSpoilers: true, qrReminder: true, clutch: true, showOpp: false, lookahead: true, injuryPause: true, pointsPopups: true, benchPlays: true, swingAlerts: true, dangerAlerts: true, injuryAlerts: true, popupTiming: 'now', popupDelay: 25, autoUpdate: true, splitScreen: true, showMatchups: true, oppWeight: 0, favTeams: '', blackout: '', skipLeagues: [], tracked: [], espnLeagues: [], bugSamples: false, perf: 'auto', tunePreset: 'balanced', alertsPreset: 'all', popupMin: 0, tdHere: 'full', tdAway: 'full' };
 let cfg = { ...DEFAULTS };
 document.getElementById('gear').onclick = async () => {
   if (!form.hidden) { form.hidden = true; return; }

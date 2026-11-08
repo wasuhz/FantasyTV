@@ -149,6 +149,17 @@
   .mu { position: relative; overflow: hidden; }
   .mu .pg { flex: 1 0 100%; display: flex; flex-direction: column; justify-content: center; gap: 8px; }
   .mu .pg.in { animation: muin .8s cubic-bezier(.65,0,.35,1) both; }
+  /* clutch: a close matchup with few players left: the margin and who's left */
+  .mu .lg .wp.clutch { color: #2a1600; background: #ffb020; padding: 3px 9px; border-radius: 6px; font-size: 17px; animation: clutchpulse 1.6s ease-in-out infinite; }
+  @keyframes clutchpulse { 50% { box-shadow: 0 0 0 4px rgba(255,176,32,.25); } }
+  .mu .cl { margin-top: 5px; font: 600 14px/1.25 var(--sans); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .mu .cl b { color: #ffb020; font-weight: 700; }
+  /* each minute: the phone remote's QR code in place of the scores, for 20 s */
+  .mu .qrpg { flex-direction: row; align-items: center; gap: 16px; }
+  .mu .qrpg img { width: 108px; height: 108px; padding: 5px; background: #fff; border-radius: 8px; flex: none; }
+  .mu .qrpg b { display: block; font: italic 800 21px/1.1 var(--mono); letter-spacing: .03em; color: var(--cyan); margin-bottom: 4px; }
+  .mu .qrpg span { display: block; font: 600 15px/1.3 var(--sans); color: var(--text); }
+  .mu .qrpg small { display: block; margin-top: 5px; font: 500 13px/1.3 var(--sans); color: var(--muted); }
   .mu .pg.out { position: absolute; left: 10px; right: 16px; top: 0; bottom: 0; pointer-events: none; animation: muout .8s cubic-bezier(.65,0,.35,1) both; }
   @keyframes muin { from { transform: translateY(100%); } to { transform: none; } }
   @keyframes muout { from { transform: none; } to { transform: translateY(-100%); } }
@@ -209,6 +220,39 @@
   .splitlbl .pl { color: var(--lime); }
   .splitlbl .mute { margin-left: auto; font: 700 14px/1 var(--mono); color: var(--muted); border: 1px solid var(--line); padding: 4px 6px; border-radius: 9px; }
   html.split #callouts { display: none; }
+  /* multiview: four games in quarters; each labelled, the one with the sound outlined; the usual overlay steps aside */
+  .qlbl, #qfocus { position: absolute; display: none; }
+  html.quad .qlbl { display: flex; align-items: center; gap: 8px; font: 600 19px/1 var(--mono); z-index: 3; }
+  .qlbl .tb { padding: 6px 10px; border-radius: 10px; font: 700 19px/1 var(--sans); }
+  .qlbl .st { padding: 6px 10px; border-radius: 10px; background: rgba(1,20,46,.85); }
+  .qlbl .st.rz { background: var(--red); }
+  .qlbl .pl { color: var(--lime); text-shadow: 0 1px 3px #000; }
+  .qlbl .snd { font-size: 20px; }
+  html.quad #qfocus, html.duo #qfocus { display: block; width: 960px; height: 540px; box-sizing: border-box; border: 4px solid rgba(214,220,230,.75); border-radius: 4px; box-shadow: inset 0 0 0 1px rgba(0,0,0,.35); z-index: 2; transition: left .2s, top .2s; }
+  /* 4 games at once: the scores puck at the centre, where the corners meet */
+  #qpuck { position: absolute; left: 960px; top: 540px; transform: translate(-50%, -50%) scale(.96); display: none; opacity: 0; min-width: 360px;
+    padding: 8px 16px 9px; border-radius: 16px; background: rgba(1,20,46,.88); border: 1px solid rgba(214,220,230,.35); box-shadow: 0 8px 30px rgba(0,0,0,.55);
+    z-index: 3; transition: opacity .35s, transform .35s; }
+  html.quad #qpuck { display: block; }
+  html.quad #qpuck.on { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  #qpuck .news { text-align: center; font: italic 800 22px/1.1 var(--mono); color: var(--lime); margin-bottom: 6px; }
+  #qpuck .r { display: grid; grid-template-columns: 1fr auto auto auto 64px; align-items: baseline; gap: 10px; padding: 3px 0; }
+  #qpuck .lg { font: 600 14px/1 var(--sans); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 170px; }
+  #qpuck b { font: italic 800 22px/1 var(--mono); }
+  #qpuck b.up { color: var(--lime); } #qpuck b.dn { color: #fff; }
+  #qpuck .v { color: var(--muted); }
+  #qpuck .w { text-align: right; font: 700 15px/1 var(--mono); color: var(--muted); }
+  #qpuck .w.cl { color: #ffb020; }
+  /* multiview: a window's list (OK on it): what to watch there */
+  #qpick { position: absolute; display: none; width: 500px; padding: 14px; border-radius: 16px; background: rgba(1,20,46,.94); border: 1px solid rgba(214,220,230,.35); box-shadow: 0 10px 40px rgba(0,0,0,.6); z-index: 4; }
+  html.quad #qpick.on, html.duo #qpick.on { display: block; }
+  #qpick .h { font: italic 800 18px/1 var(--mono); letter-spacing: .12em; color: var(--muted); margin: 2px 4px 10px; }
+  #qpick .it { padding: 9px 12px; border-radius: 10px; border: 2px solid transparent; }
+  #qpick .it.sel { background: #0c2f61; border-color: rgba(214,220,230,.8); }
+  #qpick .it b { display: block; font: 700 22px/1.15 var(--sans); }
+  #qpick .it span { display: block; font: 500 15px/1.3 var(--sans); color: var(--muted); }
+  /* multiview is the games alone: the broadcasts show their own scores, and nothing of ours covers them but the outline */
+  html.quad #lower, html.quad #ticker, html.quad #callouts, html.quad .splitlbl, html.quad #radar, html.quad #pops, html.quad .qlbl { display: none !important; }
   /* points popups: one compact line each, stacked just above your matchup scores (bottom right) */
   #pops { position: absolute; right: 60px; bottom: 230px; display: flex; flex-direction: column-reverse; gap: 8px; align-items: flex-end; transition: bottom .35s; }
   #ticker.on ~ #pops { bottom: 298px; }   /* above the "You're watching" strip while it's up */
@@ -284,10 +328,12 @@
   /* the quarter */
   #bug .c.clk .q { display: flex; align-items: center; padding: 0 30px 0 20px; margin-right: 8px; font: italic 800 22px/1 var(--mono); letter-spacing: .06em; }
   /* the down & distance */
-  #bug .c.dd { padding: 0 30px 0 22px; margin: 0 4px; }
+  #bug .c.dd { padding: 0 30px 0 22px; margin: 0 4px; min-width: 210px; justify-content: center; box-sizing: border-box; }   /* steady between plays: only an unusually long one grows it */
   /* the time: big and white beside it */
   #bug .c.clk .tm { display: flex; align-items: center; padding: 0 22px 0 6px; font: italic 800 34px/1 var(--mono); letter-spacing: .01em;
-    text-shadow: 0 2px 4px rgba(0,0,0,.5); }
+    text-shadow: 0 2px 4px rgba(0,0,0,.5);
+    /* the clock ticks every second: digits all one width and a slot that fits 10:00, so the bar never resizes with it */
+    font-variant-numeric: tabular-nums; min-width: 104px; justify-content: center; box-sizing: content-box; }
   #bug .c.clk .tm.sm { font-size: 22px; padding-left: 20px; }
   #bug .in { height: 72px; padding-bottom: 9px; box-sizing: border-box; }   /* the drive tracker runs under everything */
   /* red zone: the down & distance keycap turns red (the cap styles above) */
@@ -590,6 +636,7 @@
   <div id="tdBanner"></div>
   <div id="bigShot"></div>
   <div id="splitL" class="splitlbl"></div><div id="splitR" class="splitlbl"></div>
+  <div id="q0" class="qlbl"></div><div id="q1" class="qlbl"></div><div id="q2" class="qlbl"></div><div id="q3" class="qlbl"></div><div id="qfocus"></div><div id="qpick"></div><div id="qpuck"></div>
   <div id="ticker"><span class="lbl">YOU'RE WATCHING</span><div class="items"></div></div>
 
   <div id="toast"></div>

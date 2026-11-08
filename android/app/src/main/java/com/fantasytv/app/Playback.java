@@ -53,6 +53,9 @@ final class Playback {
     static final String USER_AGENT = "FantasyTV/" + BuildConfig.VERSION_NAME;
     private static final String TAG = "FantasyTVPlayer";
     private static final long STALL_MS = 8_000;
+    private static final long VIDEO_STUCK_MS = 6_000;   // no new video frame this long, sound or not: reconnect
+    private int lastFrames = -1;
+    private long lastFrameAt;
 
     interface Listener { void state(String state); }
 
@@ -89,8 +92,10 @@ final class Playback {
         tap = side ? null : new StreamTap(a.getCacheDir());
         originalMode = a.getWindow().getAttributes().preferredDisplayModeId;
 
+        // A side picture (split screen, multiview) keeps 5–10 s in hand, not 15–40: nobody's listening to it, up to three
+        // run at once, and the buffer lives in the app's memory; it also starts sooner.
         DefaultLoadControl load = new DefaultLoadControl.Builder()
-                .setBufferDurationsMs(15_000, 40_000, 2_500, 5_000)
+                .setBufferDurationsMs(side ? 5_000 : 15_000, side ? 10_000 : 40_000, side ? 2_000 : 2_500, side ? 3_000 : 5_000)
                 .setPrioritizeTimeOverSizeThresholds(true)
                 .build();
         DefaultRenderersFactory renderers = new DefaultRenderersFactory(a)
@@ -113,7 +118,7 @@ final class Playback {
         player = new ExoPlayer.Builder(a, renderers).setLoadControl(load).setTrackSelector(tracks).build();
         player.setVideoSurfaceView(surface);
         player.setVideoScalingMode(C.VIDEO_SCALING_MODE_SCALE_TO_FIT);
-        if (side) player.setVolume(0f);
+        if (side) setVolume(0f);   // a side picture starts silent (its audio track off)
         player.setVideoFrameMetadataListener((presentationTimeUs, releaseTimeNs, format, mediaFormat) -> {
             if (measured || side) return;
             float stated = format.frameRate > 0 ? format.frameRate
@@ -147,6 +152,20 @@ final class Playback {
 
     /** Whether the picture goes straight to the display (then it can't be copied off the screen: use the tap). */
     boolean tunneled() { return tunnel; }
+
+    /**
+     * Sound on or off: in multiview the sound follows the highlighted game. Off switches the audio track off altogether,
+     * not just the volume: a Dolby (AC3) channel goes straight to the TV or receiver (passthrough), where volume does
+     * nothing, so it played whichever window had the outline. Also spares the decoder for the windows nobody hears.
+     */
+    void setVolume(float v) {
+        boolean on = v > 0;
+        player.setVolume(v);
+        if (on == audioOn) return;   // already so
+        audioOn = on;
+        tracks.setParameters(tracks.buildUponParameters().setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, !on));
+    }
+    private boolean audioOn = true;
 
     void play(String newUrl) {
         if (newUrl == null) return;
@@ -254,11 +273,27 @@ final class Playback {
         main.postDelayed(() -> { if (u.equals(url)) open(); }, wait);
     }
 
-    /** Every 2 s: a picture that hasn't moved for 10 s while it should be playing is a silent stall. */
+    /**
+     * Every 2 s: a picture that hasn't moved for 10 s while it should be playing is a silent stall. And the video on its
+     * own: no new frame drawn for 6 s while the sound plays on (a decoder stuck on a broken picture, green blocks, the
+     * clock still running from the audio) reconnects too, starting clean at a keyframe. Not in tunneled playback,
+     * where frames go straight to the screen uncounted.
+     */
     private void watch() {
         main.postDelayed(this::watch, 2_000);
         if (url == null || !player.getPlayWhenReady()) return;
         long pos = player.getCurrentPosition(), now = System.currentTimeMillis();
+        androidx.media3.exoplayer.DecoderCounters dc = tunnel ? null : player.getVideoDecoderCounters();
+        if (dc != null && player.getPlaybackState() == Player.STATE_READY) {
+            dc.ensureUpdated();
+            int frames = dc.renderedOutputBufferCount;
+            if (frames != lastFrames) { lastFrames = frames; lastFrameAt = now; }
+            else if (now - lastFrameAt > VIDEO_STUCK_MS) {
+                lastFrameAt = now;
+                retry("video stuck (sound still playing)");
+                return;
+            }
+        } else lastFrameAt = now;
         if (pos != lastPos) { lastPos = pos; lastMove = now; return; }
         if (now - lastMove > STALL_MS) {
             lastMove = now;
