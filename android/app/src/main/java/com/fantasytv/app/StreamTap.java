@@ -26,8 +26,10 @@ import java.io.IOException;
 @OptIn(markerClass = UnstableApi.class)
 final class StreamTap implements DataSink {
     private static final String TAG = "FantasyTVTap";
-    private static final int RING = 4 << 20;    // 4 MB: several seconds of a broadcast-quality stream
-    private static final int TAKE = 3 << 20;    // decode from the newest 3 MB
+    // Enough for a key frame: some feeds send a whole picture only every 4–6 s (about 3 MB of a 1080p stream, so a
+    // 3 MB slice often held none and decoded nothing).
+    private static final int RING = 12 << 20;   // 12 MB: ten seconds or so of a broadcast-quality stream
+    private static final int TAKE = 8 << 20;    // decode from the newest 8 MB
     private static final int TS = 188;          // MPEG-TS packet size
 
     private final byte[] ring = new byte[RING];
@@ -83,10 +85,16 @@ final class StreamTap implements DataSink {
             long durUs = 0;
             String d = mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION);
             if (d != null) try { durUs = Long.parseLong(d) * 1000; } catch (NumberFormatException ignored) { }
-            // The last key frame before the end: the newest picture there is.
-            Bitmap b = Build.VERSION.SDK_INT >= 27
-                    ? mmr.getScaledFrameAtTime(durUs, MediaMetadataRetriever.OPTION_PREVIOUS_SYNC, width, height)
-                    : mmr.getFrameAtTime(durUs, MediaMetadataRetriever.OPTION_PREVIOUS_SYNC);
+            // The last key frame before the end: the newest picture there is. A slice cut from a live stream can report
+            // a duration its timestamps don't match (some TVs, the onn among them, then decode nothing at the end): so
+            // whichever way worked last time first, then the others.
+            Bitmap b = null;
+            for (int i = 0; i < WAYS && b == null; i++) {
+                int way = (way0 + i) % WAYS;
+                try { b = frame(mmr, way, durUs, width, height); } catch (RuntimeException ignored) { }
+                if (b != null && way != way0) { Log.i(TAG, "frames by way " + way); way0 = way; }
+            }
+            if (b == null && misses++ % 20 == 0) Log.w(TAG, "no frame in " + len / 1024 + " KB (duration " + durUs / 1000 + " ms)");
             if (b != null && (b.getWidth() != width || b.getHeight() != height)) {
                 Bitmap s = Bitmap.createScaledBitmap(b, width, height, true);
                 b.recycle();
@@ -99,5 +107,17 @@ final class StreamTap implements DataSink {
         } finally {
             try { mmr.release(); } catch (IOException ignored) { }
         }
+    }
+
+    private static final int WAYS = 4;
+    private volatile int way0;   // the way that last gave a frame on this TV
+    private int misses;
+
+    /** One way to get a frame: 0 the key frame before the end, 1 the frame nearest the end, 2 halfway, 3 any frame. */
+    private static Bitmap frame(MediaMetadataRetriever mmr, int way, long durUs, int width, int height) {
+        long at = way == 2 ? durUs / 2 : durUs;
+        int opt = way == 1 ? MediaMetadataRetriever.OPTION_CLOSEST_SYNC : MediaMetadataRetriever.OPTION_PREVIOUS_SYNC;
+        if (way == 3) return mmr.getFrameAtTime();
+        return Build.VERSION.SDK_INT >= 27 ? mmr.getScaledFrameAtTime(at, opt, width, height) : mmr.getFrameAtTime(at, opt);
     }
 }

@@ -248,6 +248,8 @@
         <small>ESPN reports plays before your stream shows them. When one of your starters makes a big play (touchdown, 20+ yards) in another game, the TV switches there in time to watch it. Needs the stream delay right.</small>
         <label class="chk">Split screen when two of your drives are hot<input type="checkbox" name="splitScreen"></label>
         <small>The game on screen moves left (with its sound), the other plays muted on the right, until it cools off. Uses a second stream from your IPTV.</small>
+        <label class="chk">Skip injured players until they return<input type="checkbox" name="injuryPause"></label>
+        <small>When one of your starters is injured during a play, AutoTune stops tuning to his game for him until the play-by-play says he has returned to the game (or he's in a play again). If he never returns, he stays skipped until the game ends.</small>
         <div class="two"><label>Time between changes (s)<input name="cooldown" type="number" min="20" max="600"></label>
           <label>Opponents count<span class="pct"><input name="oppWeight" type="number" min="0" max="100" step="5"><b>%</b></span></label></div>
         <small>Opponents count: how much their players matter when picking a game (0 = not at all, 100 = same as yours).</small>
@@ -321,6 +323,8 @@
         <label>Touchdown in the game you're watching<select name="tdHere"><option value="full">Full moment (photo pops out, bar flashes)</option><option value="glow">Card glow only</option><option value="off">Nothing</option></select></label>
         <label>Your touchdown in another game<select name="tdAway"><option value="small">Small popup, once it airs there</option><option value="full">Full-screen banner, right away</option><option value="off">Nothing</option></select></label>
         <small>A popup never shows for the game you're watching: you see the play, and the player's card lights up instead.</small>
+        <label class="chk">Bench players' big plays (touchdowns, 20+ yards), marked BENCH<input type="checkbox" name="benchPlays"></label>
+        <small>They score you nothing this week, so AutoTune never switches for them; OK on the popup watches that game if you want to.</small>
         <label class="chk">Injuries (one of your starters gets hurt)<input type="checkbox" name="injuryAlerts"></label>
         <label class="chk">Win-chance swings (a matchup moves 20%+)<input type="checkbox" name="swingAlerts"></label>
         <label class="chk">Opponents' big plays (touchdowns, big gains, red zone)<input type="checkbox" name="dangerAlerts"></label>
@@ -587,7 +591,7 @@ document.getElementById('pCancel').onclick = () => { link.send({ type: 'cancel' 
 // Settings live on the TV (/api/config); saving restarts the TV page with them.
 const form = document.getElementById('settings');
 const DEFAULTS = { sleeper: '', mode: 'live', delay: 30, rzScores: true, cooldown: 75, iptvBase: '', xtServer: '', xtUser: '', xtPass: '', stalkerPortal: '', stalkerMac: '', iptvSource: 'auto',
-  hideSpoilers: true, showOpp: false, lookahead: true, pointsPopups: true, swingAlerts: true, dangerAlerts: true, injuryAlerts: true, popupTiming: 'now', popupDelay: 25, autoUpdate: true, splitScreen: true, showMatchups: true, oppWeight: 0, favTeams: '', blackout: '', skipLeagues: [], tracked: [], espnLeagues: [], bugSamples: false, perf: 'auto', tunePreset: 'balanced', alertsPreset: 'all', popupMin: 0, tdHere: 'full', tdAway: 'full' };
+  hideSpoilers: true, showOpp: false, lookahead: true, injuryPause: true, pointsPopups: true, benchPlays: true, swingAlerts: true, dangerAlerts: true, injuryAlerts: true, popupTiming: 'now', popupDelay: 25, autoUpdate: true, splitScreen: true, showMatchups: true, oppWeight: 0, favTeams: '', blackout: '', skipLeagues: [], tracked: [], espnLeagues: [], bugSamples: false, perf: 'auto', tunePreset: 'balanced', alertsPreset: 'all', popupMin: 0, tdHere: 'full', tdAway: 'full' };
 let cfg = { ...DEFAULTS };
 document.getElementById('gear').onclick = async () => {
   if (!form.hidden) { form.hidden = true; return; }
@@ -622,14 +626,14 @@ document.getElementById('setCancel').onclick = () => { form.hidden = true; };
 // Good · better · best presets, each with Custom: picking one fills in its switches (Custom shows them).
 const PRESETS = {
   tunePreset: {
-    steady: { lookahead: false, splitScreen: false, cooldown: 150, oppWeight: 0 },
-    balanced: { lookahead: true, splitScreen: true, cooldown: 75, oppWeight: 0 },
-    chase: { lookahead: true, splitScreen: true, cooldown: 45, oppWeight: 50 },
+    steady: { lookahead: false, splitScreen: false, injuryPause: true, cooldown: 150, oppWeight: 0 },
+    balanced: { lookahead: true, splitScreen: true, injuryPause: true, cooldown: 75, oppWeight: 0 },
+    chase: { lookahead: true, splitScreen: true, injuryPause: true, cooldown: 45, oppWeight: 50 },
   },
   alertsPreset: {
-    quiet: { pointsPopups: true, popupMin: 5, tdHere: 'full', tdAway: 'small', injuryAlerts: true, swingAlerts: true, dangerAlerts: false, showOpp: false },
-    mine: { pointsPopups: true, popupMin: 0, tdHere: 'full', tdAway: 'small', injuryAlerts: true, swingAlerts: true, dangerAlerts: false, showOpp: false },
-    all: { pointsPopups: true, popupMin: 0, tdHere: 'full', tdAway: 'full', injuryAlerts: true, swingAlerts: true, dangerAlerts: true, showOpp: false },
+    quiet: { pointsPopups: true, benchPlays: false, popupMin: 5, tdHere: 'full', tdAway: 'small', injuryAlerts: true, swingAlerts: true, dangerAlerts: false, showOpp: false },
+    mine: { pointsPopups: true, benchPlays: true, popupMin: 0, tdHere: 'full', tdAway: 'small', injuryAlerts: true, swingAlerts: true, dangerAlerts: false, showOpp: false },
+    all: { pointsPopups: true, benchPlays: true, popupMin: 0, tdHere: 'full', tdAway: 'full', injuryAlerts: true, swingAlerts: true, dangerAlerts: true, showOpp: false },
   },
 };
 // Performance, spelled out (Auto shows whichever it picked on this TV).
@@ -649,6 +653,7 @@ const PERF_INCLUDES = {
 const INCLUDES = {
   pointsPopups: v => [v, "Your players' points popups (bottom right)"],
   popupMin: (v, all) => all.pointsPopups && [true, ['', '', 'Only plays worth 2+ points', '', '', 'Only big plays: 5+ points', 'Only touchdowns: 6+ points'][v] || 'Every play that scores, even 0.1'],
+  benchPlays: v => [v, "Bench players' big plays (marked BENCH)"],
   injuryAlerts: v => [v, 'Injury alerts for your starters'],
   swingAlerts: v => [v, 'Win-chance swings (a matchup moves 20%+)'],
   dangerAlerts: v => [v, "Opponents' touchdowns, big plays and red zone"],
@@ -657,6 +662,7 @@ const INCLUDES = {
   tdAway: v => [v !== 'off', { small: "Your touchdowns in other games: a small popup once the play airs on that channel (no spoiler)", full: 'Your touchdowns in other games: the full-screen banner, as soon as ESPN reports them', off: 'No popup for your touchdowns in other games' }[v]],
   lookahead: v => [v, 'Jumps to another game in time for your big plays'],
   splitScreen: v => [v, 'Split screen when two of your drives are hot'],
+  injuryPause: v => [v, 'Skips injured starters until they return'],
   cooldown: v => [true, `${v} s at least between game changes`],
   oppWeight: v => [v > 0, v > 0 ? `Opponents' players count ${v}% as much as yours` : "Opponents' players move the TV too"],
 };

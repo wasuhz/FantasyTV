@@ -1,4 +1,4 @@
-import { loadRosters, espnPhotos, loadScoreboard, loadPoints, loadMatchups, statLine, winChance, settled } from './data.js';
+import { loadRosters, espnPhotos, loadScoreboard, loadPoints, loadMatchups, statLine, winChance, settled, loadPlays } from './data.js';
 import { rankAll, AutoTune } from './engine.js';
 import { Sim } from './sim.js';
 import { Iptv, proxied } from './iptv.js';
@@ -166,6 +166,8 @@ async function start() {
     setTimeout(refreshMatchups, 2500);
     setInterval(refreshMatchups, 15000);
     setTimeout(refreshChannels, 3000);
+    setTimeout(scanInjuries, 5000);   // injuries from before the TV started
+    setInterval(scanInjuries, 3 * 60000);
     setInterval(refreshChannels, 2 * 60000);
   }
   drawField();
@@ -271,6 +273,20 @@ function spotBigPlays(prev, next) {
         playStats.last = `${got.what} · ${p.short}`;
       }
     }
+    // Your bench players' big plays (a touchdown, 20+ yards): a popup marked BENCH, since they score you nothing this
+    // week. AutoTune never chases them; OK on the popup watches the game if you want to. Timed like your starters'.
+    if (settings.benchPlays !== false) {
+      for (const p of Object.values(roster.players)) {
+        if (p.leagues.some(l => l.starter) || (p.team !== g.home.abbr && p.team !== g.away.abbr)) continue;
+        const got = playPoints(p, text, g.sit.lastPlay.type);
+        const yards = got ? +((/(-?\d+)-yd/.exec(got.what) || [])[1] || 0) : 0;
+        if (!got || !(/touchdown/i.test(got.what) || yards >= 20)) continue;
+        const td = /touchdown/i.test(got.what), watching = watchingGame(g.id);
+        const wait = Math.max(popupWait(g, watching), td ? ((sim ? settings.delay : delayFor(g.id)) + 2) * 1000 : 0);
+        popups.push({ showAt: next.t + wait, game: g.id, who: p, pts: got.pts, what: got.what, espnAt: next.t, bench: true, benchTd: td,
+          team: p.team === g.home.abbr ? g.home : g.away, teams: 1 });
+      }
+    }
     injuryFrom(g, text, mine, next.t);
     dangerFrom(g, before, text, next.t);
     const yards = Number((/for (\d+) yards?/i.exec(text) || [])[1] || 0);
@@ -279,7 +295,8 @@ function spotBigPlays(prev, next) {
     if ((/intercept|fumble|no play/i.test(text) || (/penalty/i.test(text) && !/declined/i.test(text))) && !td) continue;
     const who = mine.find(p => (p.team === g.home.abbr || p.team === g.away.abbr) && text.includes(espnName(p)));
     if (who) bigPlays.push({ game: g.id, at: next.t, who, td, yards });
-    // Anyone's touchdown or 30+ yard play: worth a look when nothing of yours is on the field where you are.
+    // Anyone's touchdown or 30+ yard play (lookahead() only takes others' touchdowns, when none of your starters has
+    // the ball anywhere).
     else if (td || yards >= 30) bigPlays.push({ game: g.id, at: next.t, who: null, td, yards, team: g.sit.poss || '' });
   }
   bigPlays = bigPlays.filter(b => Date.now() - b.at < 180e3);   // lookahead() drops the ones too late to catch
@@ -291,16 +308,25 @@ function lookahead() {
   const now = Date.now();
   const toAir = b => delayFor(b.game) - (now - b.at) / 1000;   // seconds until it reaches your screen on that channel
   bigPlays = bigPlays.filter(b => toAir(b) >= LEAD_NEEDED);   // missed: it would air before we got there
-  // Someone else's big play only pulls you away when none of your starters are on the field in the game you're on.
+  // Someone else's touchdown only pulls you away when none of your starters has the ball anywhere: not in the game
+  // you're on (or it's on a break), and in no other game (AutoTune would rather take you there).
   const here = game(auto.current);
-  const quietHere = !here || here.onBreak || !here.players.some(p => !p.opp && !p.bench && (p.status === 'On field' || p.status === 'Red zone'));
-  const due = bigPlays.filter(b => b.game !== auto.current && toAir(b) <= LAND_EARLY + COUNTDOWN && (b.who || quietHere));
+  // Your starters in the red zone where you are: nothing pulls you away. A big play elsewhere has already happened
+  // (the highlights will have it); the points here are still to come.
+  if (here && here.state === 'in' && !here.onBreak && here.sit && here.sit.redZone && here.onField > 0) return;
+  const quietHere = !here || here.onBreak || !(here.onField > 0);
+  const quietElsewhere = !ranked.some(g => g.id !== auto.current && g.state === 'in' && g.onField > 0 && !g.onBreak && !g.endsWhy && !g.kickComing);
+  // Whether a play has aired yet is only known on a channel whose delay was measured: channels differ by 30 s and
+  // more. Someone else's touchdown: measured channels only. Your own big play: an unmeasured channel needs 8 s more.
+  const sure = b => measured(b.game) || (b.who && toAir(b) >= LEAD_NEEDED + 8);
+  const due = bigPlays.filter(b => b.game !== auto.current && toAir(b) <= LAND_EARLY + COUNTDOWN && sure(b) && (b.who || (b.td && quietHere && quietElsewhere)));
   const b = due[due.length - 1];
   if (!b) return;
   const g = game(b.game);
-  if (!g || g.skip) return;
+  if (!g || g.skip || g.hasChannel === false) return;   // a game you skipped, or not on your channels
   const what = b.who ? `your ${b.who.pos} ${b.who.short}` : `${b.team ? b.team + ' ' : ''}${b.td ? 'touchdown' : `${b.yards}-yard play`}`;
-  const r = auto.lookahead(b.game, `Big play coming · ${what}`, now);
+  // Stay until about 10 s after it airs (its replay), not longer: your players may be busy elsewhere.
+  const r = auto.lookahead(b.game, `Big play coming · ${what}`, now, toAir(b) + 10);
   if (r.pending) bigPlays = bigPlays.filter(x => x !== b);
 }
 
@@ -310,6 +336,7 @@ async function pollScoreboard() {
     const snap = { t: Date.now(), games: b.games };
     try { spotBigPlays(snapshots[snapshots.length - 1], snap); } catch (e) { playStats.error = String(e && e.stack || e).slice(0, 300); }
     snapshots.push(snap);
+    resolvePendingReads();   // clock readings ESPN had yet to reach
     // Enough history for the delay plus the phone's clock sync (up to about 6 minutes back).
     const keep = Date.now() - Math.max(settings.delay * 1000 + 120e3, 400e3);
     while (snapshots.length > 2 && snapshots[1].t < keep) snapshots.shift();
@@ -459,20 +486,31 @@ function popupWait(g, watching) {
   if (redZone) return Math.max(fixed, (+settings.delay || 30) + 2) * 1000;
   const stream = (sim ? settings.delay : delayFor(g.id)) + 2;
   if (settings.popupTiming === 'stream') return stream * 1000;
-  if (watching) return Math.max(fixed, stream) * 1000;
+  // The game on screen: exactly when the play reaches your screen, the same moment your league scores and the
+  // player's points change (behindMs), so all three land together.
+  if (watching) return stream * 1000;
   return settings.popupTiming === 'all' ? fixed * 1000 : 0;
 }
 
-/** Live: the scoreboard from `delay` seconds ago, to match the IPTV picture (ESPN runs ahead of the stream). */
 /**
- * How far a game's channel runs behind ESPN, in seconds. Channels differ (one provider's feed was 24 s behind, another
- * 34 s), so clock sync saves a delay per channel; channels never synced use the general stream delay.
+ * How far a game's channel runs behind ESPN, in seconds (0 when it's level with ESPN or ahead: then ESPN's newest is
+ * the picture). Channels differ (24 s behind on one provider, 34 s on another, level on a third), so the clock read off
+ * the picture learns a delay per channel. A channel not measured yet: the middle of those measured since the TV
+ * started (the same provider, the same day), else the one saved for it, else the general stream delay.
  */
 function delayFor(gameId) {
-  const ch = gameId === auto.current && tunedChannel ? tunedChannel.name : (channelMap[gameId] || {}).name;
-  const d = ch && settings.channelDelays && settings.channelDelays[ch];
-  return d != null ? d : settings.delay;
+  const ch = channelOf(gameId);
+  const saved = settings.channelDelays || {};
+  let d = ch != null ? (learnedNow[ch] ?? (Object.keys(learnedNow).length ? null : saved[ch])) : null;
+  if (d == null) {
+    const today = Object.values(learnedNow).sort((a, b) => a - b);
+    d = today.length ? today[Math.floor(today.length / 2)] : ch != null && saved[ch] != null ? saved[ch] : settings.delay;
+  }
+  return Math.max(0, d);
 }
+const channelOf = gameId => gameId === auto.current && tunedChannel ? tunedChannel.name : (channelMap[gameId] || {}).name;
+/** The channel's delay was measured since the TV started: trusted, no safety margin needed. */
+const measured = gameId => { const ch = channelOf(gameId); return ch != null && learnedNow[ch] != null; };
 
 /**
  * The game clock as it reads on your screen right now, running. ESPN's clock only moves in jumps (about once a play),
@@ -532,38 +570,77 @@ window.ftvClock = (period, secs, at, logo) => {
   readClock = { game: g.id, channel: tunedChannel.name, period, secs, at, running };
   // For checking: the clock this TV shows from ESPN against the one on the broadcast at the same moment (+: ours is
   // ahead of the picture, that is, lower), the last 60 readings, for the phone's diagnostics and our tests.
-  clockChecks.unshift({ ch: tunedChannel.name, q: period, read: secs, ours: +expect[1] * 60 + +expect[2], diff: secs - (+expect[1] * 60 + +expect[2]), running, delay: delayFor(g.id), at: Math.round(at) });
+  const est = running ? learnDelay(g.id, tunedChannel.name, period, secs, at) : null;
+  clockChecks.unshift({ ch: tunedChannel.name, q: period, read: secs, ours: +expect[1] * 60 + +expect[2], diff: secs - (+expect[1] * 60 + +expect[2]), running, est, delay: delayFor(g.id), at: Math.round(at) });
   clockChecks.length = Math.min(clockChecks.length, 60);
-  if (running) learnDelay(g.id, tunedChannel.name, period, secs, at);
 };
 
 /**
- * One estimate of how far this channel runs behind ESPN: when did ESPN's clock reach the clock just read? The first
- * scoreboard at or below it (same quarter) was fetched at s.t showing c ≤ secs; with the clock running into it, ESPN
- * was at `secs` (secs - c) seconds before. Only when c is close, so the guess is tight. The channel's delay becomes
- * the median of the last few estimates, saved for next time.
+ * One estimate of how far this channel runs behind ESPN, from a running clock just read off the picture: when did
+ * ESPN's clock reach it? The first scoreboard at or below it (same quarter) was fetched at s.t showing c ≤ secs; with
+ * the clock running into it, ESPN was at `secs` (secs - c) seconds before. Only when c is close, so the guess is tight.
+ * Either way round: some feeds run 30 s behind ESPN, others level with it or ahead (ESPN's clock lags the broadcast),
+ * which shows as ESPN reaching the clock only after the picture did: such readings wait (pendingReads) until it does.
+ * undefined: ESPN isn't there yet; null: can't tell.
  */
-function learnDelay(gameId, channel, period, secs, at) {
+const pendingReads = [];   // running readings ESPN hadn't reached yet: {gameId, channel, period, secs, at}
+function delayEstimate(gameId, period, secs, at) {
   const secsOf = c => { const m = /(\d+):(\d+)/.exec(c || ''); return m ? +m[1] * 60 + +m[2] : null; };
-  let hit = null;
+  let hit = null, above = false;
   for (const s of snapshots) {
     const g = s.games.find(x => x.id === gameId);
     if (!g || g.period !== period) continue;
     const c = secsOf(g.clock);
-    if (c != null && c <= secs) { hit = { t: s.t, c }; break; }
+    if (c == null) continue;
+    if (c <= secs) { hit = { t: s.t, c }; break; }
+    above = true;
   }
-  if (!hit || secs - hit.c > 8) return;
-  const delay = (at - (hit.t - (secs - hit.c) * 1000)) / 1000;
-  if (delay < 10 || delay > 90) return;   // IPTV runs 10–90 s behind; anything else is a misread
+  if (!hit) return above ? undefined : null;
+  if (!above || secs - hit.c > 8) return null;   // there before our history starts, or too coarse to tell
+  return (at - (hit.t - (secs - hit.c) * 1000)) / 1000;
+}
+
+/** A running clock read off the picture: its delay estimate now (rounded, for the clock checks), or later. */
+function learnDelay(gameId, channel, period, secs, at) {
+  const delay = delayEstimate(gameId, period, secs, at);
+  if (delay === undefined) { pendingReads.push({ gameId, channel, period, secs, at }); if (pendingReads.length > 60) pendingReads.shift(); return null; }
+  if (delay === null) return null;
+  addDelaySample(channel, delay);
+  return Math.round(delay * 10) / 10;
+}
+
+/** After each scoreboard: the readings ESPN has now caught up with (2 minutes at most). */
+function resolvePendingReads() {
+  for (let i = pendingReads.length - 1; i >= 0; i--) {
+    const r = pendingReads[i];
+    const delay = Date.now() - r.at > 120e3 ? null : delayEstimate(r.gameId, r.period, r.secs, r.at);
+    if (delay === undefined) continue;
+    pendingReads.splice(i, 1);
+    if (delay !== null) {
+      addDelaySample(r.channel, delay);
+      const c = clockChecks.find(x => x.at === Math.round(r.at));
+      if (c) c.est = Math.round(delay * 10) / 10;
+    }
+  }
+}
+
+/**
+ * The channel's delay becomes the median of its last few estimates once they agree, saved for next time.
+ * learnedNow: channels measured since the TV started, whose delay is trusted (popups skip their safety wait).
+ */
+const learnedNow = {};
+function addDelaySample(channel, delay) {
+  if (delay < -45 || delay > 90) return;   // a misread
   const list = (delaySamples[channel] ||= []);
   list.push(delay);
   if (list.length > 9) list.shift();
-  if (list.length < 5) return;
-  // Change the channel's delay only when the readings agree: the middle five within 4 s of each other.
+  if (list.length < 3) return;
+  // Change the channel's delay only when the readings agree: the middle ones (up to five) within 4 s of each other.
   const sorted = [...list].sort((a, b) => a - b), mid = Math.floor(sorted.length / 2);
   const core = sorted.slice(Math.max(0, mid - 2), mid + 3);
   if (core[core.length - 1] - core[0] > 4) return;
   const now = Math.round(sorted[mid]);
+  learnedNow[channel] = now;
   const was = (settings.channelDelays || {})[channel];
   if (was !== now && (was == null || Math.abs(was - now) >= 2)) {
     settings.channelDelays = { ...(settings.channelDelays || {}), [channel]: now };
@@ -614,7 +691,7 @@ function loop() {
   const games = currentGames();
   const pointsSrc = sim ? sim.points() : pointsShown();
   applySettings();
-  ranked = rankAll(games, roster.players, pointsSrc, prefs);
+  ranked = rankAll(games, roster.players, pointsSrc, settings.injuryPause === false ? prefs : { ...prefs, out: { ...prefs.out, ...sidelinedOut() } });   // plus starters injured, until back
   // What ESPN can't say: the channel on screen went to a commercial (its score bug is gone).
   // No new play for 75 s (a snap comes every ~40 s): a stoppage ESPN didn't name (injury, review, a long ad break).
   for (const g of ranked) {
@@ -624,7 +701,9 @@ function loop() {
     else if (Date.now() - seen.at > 75e3 && !g.onBreak) { g.onBreak = true; g.breakWhy = 'No play for a while'; g.value *= 0.25; g.onField *= 0.25; }
   }
   const cur = game(auto.current);
-  if (cur && cur.state === 'in' && onCommercial(cur.id)) {
+  // A missing score bug alone is often a replay, a sideline shot or a graphic, mid-drive. Believe it at once when ESPN
+  // also has a stoppage there (timeout, score, change of possession, quarter); otherwise only after 25 s of it.
+  if (cur && cur.state === 'in' && onCommercial(cur.id) && (cur.onBreak || cur.endsWhy || Date.now() - adSince >= 25e3)) {
     if (!cur.onBreak) { cur.value *= 0.25; cur.onField *= 0.25; }
     cur.onBreak = true; cur.breakWhy = 'Commercial';
     auto.adOn = cur.id;   // a real ad: leave without the usual wait
@@ -916,6 +995,7 @@ async function syncClock(text) {
   // Saved for this channel, and as the general delay for channels not synced yet.
   const ch = tunedChannel && tunedChannel.name;
   settings.channelDelays = { ...(settings.channelDelays || {}), ...(ch ? { [ch]: delay } : {}) };
+  if (ch) learnedNow[ch] = delay;   // synced by hand: as good as measured
   settings.delay = delay;
   try {
     const cfg = await (await fetch('/api/config', { cache: 'no-store' })).json();
@@ -933,7 +1013,7 @@ function publish() {
     redZone: !!redZone, redZoneOpen: !!redZoneRow(), view,
     version: native ? native.version() : 'browser', update: update && { versionName: update.versionName, notes: update.notes }, channel: tunedChannel && tunedChannel.name,
     pending: auto.pending && { to: auto.pending.to, endsAt: auto.pending.endsAt, why: auto.pending.why },
-    playStats, popupsWaiting: popups.length, ad: { misses: bugMisses, game: bugGame, on: auto.adOn }, readClock, channelDelays: settings.channelDelays || {}, delaySamples, clockChecks,
+    playStats, popupsWaiting: popups.length, ad: { misses: bugMisses, game: bugGame, on: auto.adOn }, readClock, channelDelays: settings.channelDelays || {}, delaySamples, clockChecks, learnedNow, pendingReads: pendingReads.length,
     matchups: matchupsNow(), channels: channelMap, channelNames, iptv: !!iptv, bigPlays: bigPlays.map(b => ({ game: b.game, at: b.at, who: b.who ? b.who.short : b.team, td: b.td, yards: b.yards })),
     log: auto.log.slice(0, 12), delay: settings.delay, away, rosterAt, out: prefs.out,
     hideSpoilers: settings.hideSpoilers !== false, rewind: rewindOn(), tunnel: tunnelOn(), waiting: !!(auto.pending && auto.pending.waiting),
@@ -1469,15 +1549,64 @@ function queueAlert(a) { popups.push({ kind: 'alert', showAt: Date.now(), team: 
 // Injuries: one of your starters named in the same sentence as an injury in ESPN's play text ("D.Kincaid was injured
 // during the play.", "Injury update: D.Kincaid is questionable to return."). A red alert, timed like the points popups
 // (never before the play reaches your screen), once per player and game in 15 minutes.
-const INJURY = /\b(?:injur(?:y|ed)|hurt|shaken up|questionable to return|doubtful to return|out for the (?:game|day|remainder)|ruled out|evaluated for a concussion|concussion protocol|carted off|(?:left|exited) the game)\b/i;
+const INJURY = /\b(?:injur(?:y|ed)|hurt|shaken up|questionable to return|doubtful to return|out for the (?:game|day|remainder)|ruled out|will not return|won't return|evaluated for a concussion|concussion protocol|carted off|(?:left|exited) the game)\b/i;
 const injurySeen = {};   // player id + game -> when
+/**
+ * Injured starters sit out of AutoTune: the NFL's play-by-play (ESPN's play text) says "X was injured during the play"
+ * when one goes down and "Injury Update: X has returned to the game" when he's back. In between he counts as out, as
+ * if you'd marked him out on the phone: no tuning to his game for him. Back when that update comes, or when he's in a
+ * play again; if neither ever comes, he stays out until the game ends ("ruled out" is never written). id -> game id.
+ */
+const sidelined = {};
+const WENT_DOWN = /injured during the play|carted off|evaluated for a concussion|concussion protocol/i;
+const RETURNED = /returned to the game/i;
+function sidelinedOut() {
+  const out = {};
+  for (const [id, gameId] of Object.entries(sidelined)) {
+    const g = game(gameId);
+    if (!g || g.state === 'post') delete sidelined[id]; else out[id] = true;
+  }
+  return out;
+}
+
+/**
+ * The same from the whole play-by-play, for what happened before the TV started (or between scoreboard checks): each
+ * live game with your starters, read in order, at start and every 3 minutes. Only a starter's latest state counts:
+ * down and not back since, or fine.
+ */
+async function scanInjuries() {
+  if (sim || !roster || settings.injuryPause === false) return;
+  const mine = Object.values(roster.players).filter(p => p.leagues.some(l => l.starter));
+  for (const g of ranked.filter(x => x.state === 'in')) {
+    const here = mine.filter(p => p.team === g.home.abbr || p.team === g.away.abbr);
+    if (!here.length) continue;
+    let plays;
+    try { plays = await loadPlays(g.id); } catch { continue; }
+    for (const p of here) {
+      const n = espnName(p);
+      let down = false;
+      for (const text of plays) {
+        if (!text.includes(n)) continue;
+        const sentences = text.split(/(?<=[a-z0-9)])\.\s+/i);
+        down = sentences.some(s => s.includes(n) && WENT_DOWN.test(s));
+      }
+      if (down) sidelined[p.id] = g.id; else if (sidelined[p.id] === g.id) delete sidelined[p.id];
+    }
+  }
+}
+
 function injuryFrom(g, text, mine, at) {
-  if (settings.injuryAlerts === false || !INJURY.test(text)) return;
   const sentences = text.split(/(?<=[a-z0-9)])\.\s+/i);
   for (const p of mine) {
     if (p.team !== g.home.abbr && p.team !== g.away.abbr) continue;
     const n = espnName(p);
-    if (!sentences.some(s => s.includes(n) && INJURY.test(s))) continue;
+    if (!text.includes(n)) continue;
+    const down = sentences.some(s => s.includes(n) && WENT_DOWN.test(s));
+    if (down) sidelined[p.id] = g.id;
+    else if (sidelined[p.id] === g.id) delete sidelined[p.id];   // "has returned to the game", or in a play again
+    // The alert: only for going down (an "Injury Update: … has returned" mentions "injury" too).
+    if (!sentences.some(s => s.includes(n) && INJURY.test(s) && !RETURNED.test(s))) continue;
+    if (settings.injuryAlerts === false) continue;
     const key = p.id + g.id;
     if (Date.now() - (injurySeen[key] || 0) < 15 * 60e3) continue;
     injurySeen[key] = Date.now();
@@ -1519,15 +1648,15 @@ function dangerFrom(g, before, text, at) {
     const got = playPoints(p, text, g.sit.lastPlay.type);
     const yards = got ? +((/(-?\d+)-yd/.exec(got.what) || [])[1] || 0) : 0;
     if (!got || !(/touchdown/i.test(got.what) || yards >= 20)) continue;
-    queueAlert({ tone: 'danger', big: `+${pts(got.pts)}`, line: `${p.short} · ${got.what}`, sub: `for ${vs(p)}`, game: g.id, showAt });
+    queueAlert({ tone: 'danger', big: `+${pts(got.pts)}`, line: `${p.short} · ${got.what}`, sub: `your opponent ${vs(p)}`, game: g.id, showAt });
   }
   const key = `${g.id}:${g.sit.poss}:${g.period}`;
   if (g.sit.redZone && !(before && before.sit && before.sit.redZone) && !dangerSeen[key]) {
     const theirs = opps.filter(p => p.team === g.sit.poss && /QB|RB|WR|TE|K/.test(p.pos));
     if (theirs.length) {
       dangerSeen[key] = true;
-      queueAlert({ tone: 'danger', big: 'RZ', line: `Red zone · ${g.sit.poss} ball · ${theirs.slice(0, 2).map(p => p.short).join(', ')}`,
-        sub: `for ${vs(theirs[0])}`, game: g.id, showAt });
+      queueAlert({ tone: 'danger', big: 'RZ', line: `Red zone · ${theirs.slice(0, 2).map(p => p.short).join(', ')}`,
+        sub: `your opponent ${vs(theirs[0])}`, game: g.id, showAt });
     }
   }
 }
@@ -1694,13 +1823,16 @@ function showPopups() {
     const elsewhere = p.game && (redZone || p.game !== auto.current) && (game(p.game) || {}).state === 'in';   // in RedZone, every game is elsewhere
     if (p.kind === 'alert') {
       el.classList.add('alert', p.tone);
-      el.innerHTML = `<b class="pts">${esc(p.big)}</b><span class="who">${esc(p.line)}${p.sub ? ` <em>· ${esc(p.sub)}</em>` : ''}</span>`
+      // Your opponents' plays say so up front: they look nothing like good news for you.
+      el.innerHTML = `<b class="pts">${esc(p.big)}</b><span class="who">${p.tone === 'danger' ? '<span class="opp">OPPONENT</span>' : ''}${esc(p.line)}${p.sub ? ` <em>· ${esc(p.sub)}</em>` : ''}</span>`
         + (elsewhere ? '<span class="ok">OK · WATCH</span>' : '');
       if (elsewhere) el.act = { watch: p.game, why: p.line };
     } else {
       // From the game on screen: OK replays it (the TV app keeps the last minute).
       const canReplay = !elsewhere && native && p.espnAt && p.game === auto.current && !split;
-      el.innerHTML = `<b class="pts">${p.td ? "TD +" : "+"}${pts(p.pts)}</b><span class="who">${esc(p.who.short)}${p.teams > 1 ? ` ×${p.teams}` : ''} <em>· ${esc(p.what)}</em></span>`
+      // A bench player's big play: marked BENCH and dimmed (it scores you nothing this week).
+      if (p.bench) el.classList.add('bench');
+      el.innerHTML = `<b class="pts">${p.td || p.benchTd ? "TD +" : "+"}${pts(p.pts)}</b><span class="who">${p.bench ? '<span class="benchtag">BENCH</span>' : ''}${esc(p.who.short)}${p.teams > 1 ? ` ×${p.teams}` : ''} <em>· ${esc(p.what)}</em></span>`
         + (elsewhere ? '<span class="ok">OK · WATCH</span>' : canReplay ? '<span class="ok">OK · REPLAY</span>' : '');
       if (elsewhere) el.act = { watch: p.game, why: `${p.who.short}, ${p.what}` };
       else if (canReplay) el.act = { espnAt: p.espnAt, game: p.game };

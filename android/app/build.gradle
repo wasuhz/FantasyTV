@@ -8,8 +8,8 @@ android {
         minSdk 26
         targetSdk 35
         // release.ps1 raises these for every release: Android installs only a higher versionCode as an update.
-        versionCode 53
-        versionName '1.0.51'
+        versionCode 55
+        versionName '1.0.53'
         // FantasyTV's own Yahoo app (one for everyone, like FantasyPros'): its keys come from yahoo.properties next to
         // the project (never in git). Without the file the app still builds; Yahoo then needs your own keys.
         def yahooProps = new Properties()

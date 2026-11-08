@@ -200,9 +200,9 @@ export class AutoTune {
    * yet. Switch there now, with a short countdown and without waiting for the current play, then stay long enough to
    * watch it air.
    */
-  lookahead(id, why, now = Date.now()) {
+  lookahead(id, why, now = Date.now(), staySecs = 45) {
     if (this.paused || this.locked || id === this.current || (this.pending && this.pending.to === id)) return {};
-    this.pending = { to: id, endsAt: now + 3000, total: 3, why, big: true };
+    this.pending = { to: id, endsAt: now + 3000, total: 3, why, big: true, stay: staySecs };
     return { pending: this.pending };
   }
 
@@ -242,9 +242,9 @@ export class AutoTune {
       if (now >= this.pending.endsAt) {
         // The countdown is the only wait (cancel it to stay): waiting for "the play to end" went by ESPN's timing,
         // which never quite matches the picture.
-        const { why, big } = this.pending;
+        const { why, big, stay } = this.pending;
         this.pending = null;
-        if (big) this.holdUntil = now + 45e3;   // stay for the play to air
+        if (big) this.holdUntil = now + Math.max(10, stay - 3) * 1000;   // stay for the play to air, then a little
         this.bigHold = !!big;
         return this.go(target.id, why, now);
       }

@@ -299,6 +299,14 @@ async function playerList() {
 }
 
 /** ESPN's scoreboard, normalized: every game this week with teams, score, clock and (live games) the situation. */
+/** A game's whole play-by-play so far, oldest first: the play texts ("NYG-J.McCarthy was injured during the play."). */
+export async function loadPlays(gameId) {
+  const j = await json(`${ESPN}/summary?event=${encodeURIComponent(gameId)}`);
+  const d = j.drives || {};
+  const drives = [...(d.previous || []), ...(d.current && !(d.previous || []).some(x => x.id === d.current.id) ? [d.current] : [])];
+  return drives.flatMap(x => (x.plays || []).map(p => p.text || '')).filter(Boolean);
+}
+
 export async function loadScoreboard() {
   const j = await json(`${ESPN}/scoreboard`);
   return { week: j.week && j.week.number, season: j.season && j.season.year, games: (j.events || []).map(normalize) };
