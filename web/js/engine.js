@@ -76,7 +76,9 @@ export function rankGame(full, roster, pts, prefs) {
     const starts = p.leagues.filter(l => l.starter).length;
     const first = p.leagues.find(l => l.starter) || p.leagues[0];
     const info = pts[p.id] || {};
-    const offense = g.sit && g.sit.poss === p.team;
+    // With the ball on a real down: after a score ESPN gives the scoring team the ball with no down (it's about to
+    // kick off), and that's no drive.
+    const offense = g.sit && g.sit.poss === p.team && g.sit.down >= 1;
     players.push({
       id: p.id, espn: p.espn, name: p.name, short: p.short, pos: p.pos, team: p.team, starts, teams: p.leagues.length,
       bench: starts === 0, pts: points(info.stats, first.scoring || first.rec), proj: points(info.proj, first.scoring || first.rec),
@@ -263,7 +265,8 @@ export class AutoTune {
     const ok = g => !(this.snoozed[g.id] > now) && g.id !== this.splitGame && g.hasChannel !== false;
     // A game is a reason to switch only while one of your starters has the ball there.
     // Not a drive about to end (a punt or kick coming, or over in ESPN's newer data): you'd land on the kick.
-    let best = live.find(g => g.onField > 0 && !g.endsWhy && !g.kickComing && ok(g));
+    // And not a game on a break (a timeout, a score, the ads after it): you'd land on a commercial.
+    let best = live.find(g => g.onField > 0 && !g.onBreak && !g.endsWhy && !g.kickComing && ok(g));
     const cur = live.find(g => g.id === this.current);
     if (!cur) {
       // Nothing on screen (just opened, or your game ended): straight into a game whenever one is live. Yours if one
