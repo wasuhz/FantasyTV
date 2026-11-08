@@ -177,6 +177,8 @@ public class MainActivity extends Activity {
         @JavascriptInterface public void split(String url) { main.post(() -> setSplit(url == null || url.isEmpty() ? null : url)); }
         /** A phone or tablet (touch, turns, no remote) rather than a TV. */
         @JavascriptInterface public boolean isPhone() { return phone; }
+        /** The device's maker and model ("NVIDIA SHIELD Android TV"): the page picks 4K feeds only where they play. */
+        @JavascriptInterface public String model() { return android.os.Build.MANUFACTURER + " " + android.os.Build.MODEL; }
         /** Phone, held upright or unfolded: the picture goes here (screen pixels); a zero width puts it back. */
         @JavascriptInterface public void videoRect(int x, int y, int w, int h) {
             main.post(() -> { videoAt = w > 0 && h > 0 ? new android.graphics.Rect(x, y, x + w, y + h) : null; layoutVideo(); });

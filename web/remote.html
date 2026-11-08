@@ -548,7 +548,7 @@ function draw() {
   // Redrawn only when something changed, so a tap isn't lost to a redraw mid-press.
   const mus = (s.matchups || []).map(m => `<div class="mrow"><span class="lg">${esc(m.league)}</span>
       <span class="t">${esc(m.team)}</span><b class="${m.me >= m.them ? 'w' : ''}">${pts(m.me)}</b><span class="v">–</span><b class="${m.them > m.me ? 'w' : ''}">${pts(m.them)}</b><span class="t r">${esc(m.opp)}</span>
-      <span class="pj">${m.win != null ? `<b class="${m.win >= 0.5 ? 'w' : 'l'}" style="font-size:13px">${m.win >= 0.99 ? 'CLINCHED' : m.win <= 0.01 ? 'NEED A MIRACLE' : Math.round(m.win * 100) + '% to win'}</b> · ` : ''}proj ${pts(m.meProj)} – ${pts(m.themProj)}</span></div>`).join('');
+      <span class="pj">${m.win != null ? `<b class="${m.win >= 0.5 ? 'w' : 'l'}" style="font-size:13px">${(m.settled !== undefined ? m.settled === 'won' : m.win >= 0.99) ? 'CLINCHED' : (m.settled !== undefined ? m.settled === 'lost' || m.win < 0.005 : m.win <= 0.01) ? 'NEED A MIRACLE' : Math.round(m.win * 100) + '% to win'}</b> · ` : ''}proj ${pts(m.meProj)} – ${pts(m.themProj)}</span></div>`).join('');
   const html = (mus ? `<div class="section">YOUR MATCHUPS</div><div class="mus">${mus}</div>` : '')
     + (live.length ? live.map(card).join('') : '<div class="empty">No games with your players are live right now.</div>')
     + (up.length ? `<div class="section">LATER / FINAL</div>` + up.map(card).join('') : '')
@@ -587,7 +587,7 @@ document.getElementById('pCancel').onclick = () => { link.send({ type: 'cancel' 
 // Settings live on the TV (/api/config); saving restarts the TV page with them.
 const form = document.getElementById('settings');
 const DEFAULTS = { sleeper: '', mode: 'live', delay: 30, rzScores: true, cooldown: 75, iptvBase: '', xtServer: '', xtUser: '', xtPass: '', stalkerPortal: '', stalkerMac: '', iptvSource: 'auto',
-  hideSpoilers: true, showOpp: false, lookahead: true, pointsPopups: true, swingAlerts: true, dangerAlerts: false, injuryAlerts: true, popupTiming: 'now', popupDelay: 25, autoUpdate: true, splitScreen: true, showMatchups: true, oppWeight: 0, favTeams: '', blackout: '', skipLeagues: [], tracked: [], espnLeagues: [], bugSamples: false, perf: 'auto', tunePreset: 'balanced', alertsPreset: 'quiet', popupMin: 5, tdHere: 'full', tdAway: 'small' };
+  hideSpoilers: true, showOpp: false, lookahead: true, pointsPopups: true, swingAlerts: true, dangerAlerts: true, injuryAlerts: true, popupTiming: 'now', popupDelay: 25, autoUpdate: true, splitScreen: true, showMatchups: true, oppWeight: 0, favTeams: '', blackout: '', skipLeagues: [], tracked: [], espnLeagues: [], bugSamples: false, perf: 'auto', tunePreset: 'balanced', alertsPreset: 'all', popupMin: 0, tdHere: 'full', tdAway: 'full' };
 let cfg = { ...DEFAULTS };
 document.getElementById('gear').onclick = async () => {
   if (!form.hidden) { form.hidden = true; return; }

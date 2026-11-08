@@ -17,10 +17,52 @@ function scoreChance(ytg) {
 }
 
 /**
+ * How much the down and distance leave of a drive's chance (by a player who isn't the kicker): 4th down outside the
+ * last minutes of a close game is a punt, or a field goal at best; 3rd & long usually ends the drive.
+ */
+function downFactor(g) {
+  const s = g.sit, d = s && s.down, togo = s && s.dist != null ? s.dist : 5;
+  if (!d || d < 1) return 1;
+  if (d <= 2) return 1.1;
+  if (d === 3) return togo <= 3 ? 1 : togo <= 6 ? 0.85 : togo <= 9 ? 0.7 : 0.5;
+  const late = g.period >= 4 && Math.abs(g.home.score - g.away.score) <= 8 && minutesLeft(g) <= 5;
+  return late || togo <= 1 ? 0.8 : 0.1;
+}
+
+function minutesLeft(g) {
+  const c = /(\d+):(\d+)/.exec(g.clock || '');
+  return c ? +c[1] + +c[2] / 60 : 15;
+}
+
+/**
+ * What ESPN has already said about this game that the picture hasn't shown yet (g.ahead, newer copies of it): the
+ * drive ends there (a punt, a turnover, a timeout, the end of the quarter, the ball changing hands) → why, or ''. A
+ * score isn't an end: that's the play to see.
+ */
+const SCORE = /touchdown/i, FG = /field goal/i;
+function driveEnds(g) {
+  const s = g.sit, seen = s && s.lastPlay && s.lastPlay.text;
+  for (const x of g.ahead || []) {
+    if (x.state !== 'in') return 'Game over';
+    if (x.statusName === 'STATUS_HALFTIME' || x.statusName === 'STATUS_END_PERIOD') return x.statusName === 'STATUS_HALFTIME' ? 'Halftime' : 'End of quarter';
+    const xs = x.sit, lp = xs && xs.lastPlay;
+    if (lp && lp.text !== seen && SCORE.test(lp.type)) return '';
+    if (lp && lp.text !== seen && FG.test(lp.type)) return 'Field goal';   // the kicker's play (rankGame keeps it for yours)
+    if (lp && lp.text !== seen && (BREAK_TYPE.test(lp.type) || BREAK_TEXT.test(lp.text))) return lp.type || 'Break';
+    if (s && s.poss && xs && xs.poss && xs.poss !== s.poss) return 'Change of possession';
+  }
+  return '';
+}
+
+/**
  * One game, ranked: its value right now (`value`), whether it's on a break, the "excitement" used to break ties, and
  * your players in it with their status and points.
  */
-export function rankGame(g, roster, pts, prefs) {
+export function rankGame(full, roster, pts, prefs) {
+  const { ahead, ...g } = full;
+  let endsWhy = g.state === 'in' && g.sit ? driveEnds(full) : '';
+  // Still the same drive in ESPN's newer data and closer to the end zone: it's headed there, count it from there.
+  const next = !endsWhy && (ahead || []).filter(x => x.sit && g.sit && x.sit.poss === g.sit.poss && x.sit.ytg != null).pop();
   const players = [];
   const out = prefs.out || {};
   // Your opponents' starters this week count too, as much as you say (0–100%), and show when you want them shown.
@@ -56,32 +98,47 @@ export function rankGame(g, roster, pts, prefs) {
   const teams = [g.home.abbr, g.away.abbr];
   const favTeam = teams.some(t => (prefs.favTeams || []).includes(t)), blackout = teams.some(t => (prefs.blackout || []).includes(t));
   const fav = !!prefs.hearts[g.id] || favTeam, skip = !!prefs.skips[g.id] || blackout;
-  let value = 0, onBreak = false, breakWhy = '';
+  // onField: the part of the value from your starters with the ball. Only that is a reason to tune a game: starters
+  // on defense rank it in the list, but you'd be watching them stand on the sideline.
+  let value = 0, onField = 0, onBreak = false, breakWhy = '', kickComing = '';
   if (g.state === 'in') {
-    const chance = g.sit ? scoreChance(g.sit.ytg) : 0.18;
-    const downBoost = g.sit && g.sit.down && g.sit.down <= 2 ? 1.1 : g.sit && g.sit.down === 4 ? 0.8 : 1;
+    const ytg = g.sit ? (next && next.sit.ytg < (g.sit.ytg ?? 100) ? next.sit.ytg : g.sit.ytg) : null;
+    const chance = g.sit ? scoreChance(ytg) : 0.18;
+    const downBoost = downFactor(g);
     for (const p of players) {
       if (p.out || p.bench) continue;   // bench players score you nothing: they never pull the TV anywhere
       const w = p.starts * (POS_WEIGHT[p.pos] || 0.5) * (p.opp ? oppWeight : 1);
       if (p.status === 'Red zone' || p.status === 'On field') {
-        const kick = p.pos === 'K' ? (g.sit.ytg != null && g.sit.ytg < 40 ? 1.6 : 0.5) : 1;
-        value += w * chance * downBoost * kick;
+        // The kicker: a field goal try is his play (4th down in range included), far out it's nothing.
+        const inRange = ytg != null && ytg < 40;
+        const k = p.pos === 'K';
+        const v = w * chance * (k ? (inRange ? 1.6 * Math.max(downBoost, g.sit.down === 4 ? 1.2 : 0) : 0.5) : downBoost);
+        value += v; onField += v;
       } else {
         value += w * 0.06; // they'll get the ball back
       }
     }
+    // Your kicker on the field: his field goal is the play to see, 4th down or not.
+    const myKicker = players.some(p => p.pos === 'K' && !p.bench && !p.opp && !p.out && p.status !== 'Off field');
+    if (endsWhy === 'Field goal' && myKicker) endsWhy = '';
+    // 4th down and kicking (a punt, or a field goal that isn't yours): time to look elsewhere, like a timeout.
+    if (g.sit && g.sit.down === 4 && downFactor(g) <= 0.1 && !myKicker) kickComing = g.sit.ytg != null && g.sit.ytg < 40 ? 'Field goal coming' : 'Punt coming';
+    const raw = value;
     if (g.statusName === 'STATUS_HALFTIME' || g.statusName === 'STATUS_END_PERIOD') { onBreak = true; breakWhy = g.statusName === 'STATUS_HALFTIME' ? 'Halftime' : 'End of quarter'; }
     else if (g.sit && g.sit.lastPlay && (BREAK_TYPE.test(g.sit.lastPlay.type) || BREAK_TEXT.test(g.sit.lastPlay.text))) {
       onBreak = true; breakWhy = g.sit.lastPlay.type || 'Break';
     } else if (!g.sit) { onBreak = true; breakWhy = 'Between plays'; }
     if (onBreak) value *= 0.25;
+    // The drive is already over in ESPN's newer data: tuning in now lands on the punt and the ads after it.
+    else if (endsWhy) value *= 0.1;
     if (fav) value *= 1.35;
     if (skip) value = 0;
+    onField = raw > 0 ? onField * value / raw : 0;   // the same breaks, drive ends, hearts and skips
   }
   const margin = Math.abs(g.home.score - g.away.score);
   const excite = g.state !== 'in' ? 0 : (g.period >= 4 ? 0.4 : g.period === 3 ? 0.15 : 0) + (margin <= 8 ? 0.3 : margin <= 16 ? 0.1 : 0)
     + (g.sit && g.sit.redZone ? 0.3 : 0) + (g.period >= 5 ? 0.5 : 0);
-  return { ...g, players: players.filter(p => !p.hidden), value, onBreak, breakWhy, excite, fav, skip, favTeam, blackout };
+  return { ...g, players: players.filter(p => !p.hidden), value, onField, onBreak, breakWhy, endsWhy, kickComing, excite, fav, skip, favTeam, blackout };
 }
 
 /** Rank all games: live ones by value (ties to the more exciting game), then upcoming, then finished. */
@@ -121,6 +178,7 @@ export class AutoTune {
   pick(id, now = Date.now()) {
     this.pending = null;
     this.holdUntil = now + this.opts.holdAfterPick * 1000;
+    this.bigHold = false;
     const r = this.go(id, 'You picked it', now);
     // AutoTune is fully back when the hold ends: the usual cooldown after a switch ends then too.
     this.lastSwitch = now - Math.max(0, this.opts.cooldown - this.opts.holdAfterPick) * 1000;
@@ -187,6 +245,7 @@ export class AutoTune {
         const { why, big } = this.pending;
         this.pending = null;
         if (big) this.holdUntil = now + 45e3;   // stay for the play to air
+        this.bigHold = !!big;
         return this.go(target.id, why, now);
       }
       return { pending: this.pending };
@@ -202,16 +261,19 @@ export class AutoTune {
     }
     // The game already on the right in split screen isn't a reason to switch: you're watching it.
     const ok = g => !(this.snoozed[g.id] > now) && g.id !== this.splitGame && g.hasChannel !== false;
-    let best = live.find(g => g.value > 0 && ok(g));
+    // A game is a reason to switch only while one of your starters has the ball there.
+    // Not a drive about to end (a punt or kick coming, or over in ESPN's newer data): you'd land on the kick.
+    let best = live.find(g => g.onField > 0 && !g.endsWhy && !g.kickComing && ok(g));
     const cur = live.find(g => g.id === this.current);
     if (!cur) {
       // Nothing on screen (just opened, or your game ended): straight into a game whenever one is live. Yours if one
       // counts right now, else the most exciting one on your channels.
-      const any = best || live.filter(ok).sort((a, b) => b.excite - a.excite)[0];
+      const any = best || live.filter(ok).sort((a, b) => b.fav - a.fav || b.excite - a.excite)[0];
       return any ? this.go(any.id, this.current ? 'Your game ended' : 'Top game', now) : {};
     }
-    // A game you picked is held for a while, but not through an ad seen on the picture.
-    if (now < this.holdUntil && this.adOn !== cur.id) return {};
+    // A game you picked is held for a while, but not through an ad seen on the picture. A big play you came for is
+    // held until it airs, ad or not: right before a score the picture often has no score bug (a replay, the crowd).
+    if (now < this.holdUntil && (this.bigHold || this.adOn !== cur.id)) return {};
     // Leaving for a break: not within 20 s of the last switch, so one break can't bounce you around. An ad seen on the
     // picture itself (adOn, set by the TV page) goes after 8 s.
     const seenAd = this.adOn === cur.id;
@@ -219,12 +281,27 @@ export class AutoTune {
     // last play and its replay are still on your screen. An ad seen on the picture goes at once.
     const breakOk = cur.onBreak && (seenAd ? now - this.lastSwitch >= 8e3
       : now - this.lastSwitch >= 20e3 && (cur.breakFor == null || cur.breakFor >= 15));
+    // 4th down and kicking (a punt, or a field goal that isn't your kicker's): off to a game where your starters have
+    // the ball, without waiting out the cooldown; not to a fill-in game, the kick is still football.
+    const drive = !breakOk && cur.kickComing && now - this.lastSwitch >= 20e3
+      && live.filter(g => g.id !== cur.id && g.onField > 0 && !g.onBreak && ok(g)).sort((a, b) => b.onField - a.onField)[0];
+    if (drive) return this.ask(drive, `${whyBetter(drive)} (${cur.away.abbr}-${cur.home.abbr}: ${cur.kickComing.toLowerCase()})`, now);
     // Never sit on an ad while football is on somewhere: when none of your games is playing, any live game that is
     // (yours first, then the most exciting), until one of yours comes back.
     let filler = false;
     if (breakOk && (!best || best.onBreak || best.id === cur.id)) {
-      const playing = live.filter(g => g.id !== cur.id && !g.onBreak && ok(g)).sort((a, b) => b.value - a.value || b.excite - a.excite);
-      if (playing.length) { best = playing[0]; filler = best.value <= 0; }
+      // Football right now, not a drive that's about to end (a punt or kick coming, or over in ESPN's newer data):
+      // that's a break of its own a few seconds in. Your starters with the ball first.
+      const playing = live.filter(g => g.id !== cur.id && !g.onBreak && !g.endsWhy && !g.kickComing && ok(g))
+        .sort((a, b) => b.onField - a.onField || b.fav - a.fav || b.excite - a.excite);   // then hearts and favourite teams
+      if (playing.length) { best = playing[0]; filler = best.onField <= 0; }
+      // Every game on a break and yours on a real ad for 30 s: the one whose break began longest ago (a minute or more)
+      // is likeliest back first. Not halftime.
+      else if (seenAd && (cur.breakFor || 0) >= 30) {
+        const back = live.filter(g => g.id !== cur.id && ok(g) && g.statusName !== 'STATUS_HALFTIME' && (g.breakFor || 0) >= 60)
+          .sort((a, b) => b.breakFor - a.breakFor)[0];
+        if (back) return this.ask(back, `${back.away.abbr} at ${back.home.abbr}, back sooner (${cur.away.abbr}-${cur.home.abbr}: commercial)`, now);
+      }
     }
     if (!best || best.id === cur.id) return {};
     const cooled = now - this.lastSwitch >= this.opts.cooldown * 1000;
@@ -232,10 +309,15 @@ export class AutoTune {
     if (breakOk && !best.onBreak) why = filler ? `${best.away.abbr} at ${best.home.abbr} is playing (${cur.away.abbr}-${cur.home.abbr}: ${cur.breakWhy.toLowerCase()})`
       : `${whyBetter(best)} (${cur.away.abbr}-${cur.home.abbr}: ${cur.breakWhy.toLowerCase()})`;
     // On a fill-in game (none of yours): back to yours as soon as it's playing again, no cooldown.
-    else if (cur.value <= 0 && best.value > 0 && !best.onBreak && now - this.lastSwitch >= 20e3) why = whyBetter(best);
+    else if (cur.onField <= 0 && best.onField > 0 && !best.onBreak && now - this.lastSwitch >= 20e3) why = whyBetter(best);
     else if (cooled && best.value > cur.value * this.opts.margin + 0.05) why = whyBetter(best);
     if (!why) return {};
-    this.pending = { to: best.id, endsAt: now + this.opts.countdown * 1000, why };
+    return this.ask(best, why, now);
+  }
+
+  /** The countdown to switching to g. */
+  ask(g, why, now) {
+    this.pending = { to: g.id, endsAt: now + this.opts.countdown * 1000, why };
     return { pending: this.pending };
   }
 }

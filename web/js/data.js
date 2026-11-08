@@ -406,12 +406,27 @@ export function winChance(m, teamOf, leftFor) {
       const left = leftFor(teamOf(s.id));
       const rest = Math.max(0, s.proj) * left;
       if (side > 0) meExp += rest; else themExp += rest;
-      variance += Math.pow(0.5 * Math.max(s.proj, 2), 2) * left;
+      // A player's week swings by about ¾ of his projection (a 15-point WR scores 4 or 30 often enough).
+      variance += Math.pow(0.75 * Math.max(s.proj, 4), 2) * left;
     }
   }
   if (variance < 0.01) return meExp > themExp ? 1 : meExp < themExp ? 0 : 0.5;
   const z = (meExp - themExp) / Math.sqrt(variance);
   return 0.5 * (1 + erf(z / Math.SQRT2));
+}
+
+/**
+ * Settled for real, not just likely: 'won' when your lead is beyond what their starters still to play could score even
+ * on a huge day (3× their projections for the rest of their games), or they have none left; 'lost' the same the other
+ * way; else null. Win chances near 100% early in the day are a forecast, this is the "CLINCHED" badge.
+ */
+export function settled(m, teamOf, leftFor) {
+  const rest = list => (list || []).reduce((s, p) => s + Math.max(0, p.proj) * leftFor(teamOf(p.id)), 0);
+  const playing = list => (list || []).some(p => leftFor(teamOf(p.id)) > 0);
+  const lead = m.me - m.them;
+  if (lead > 0 && (!playing(m.themStarters) || lead > 3 * rest(m.themStarters) + 5)) return 'won';
+  if (lead < 0 && (!playing(m.meStarters) || -lead > 3 * rest(m.meStarters) + 5)) return 'lost';
+  return null;
 }
 
 function erf(x) {   // Abramowitz–Stegun 7.1.26

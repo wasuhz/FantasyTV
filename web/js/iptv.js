@@ -43,12 +43,20 @@ export class Iptv {
    * rules: {games: {gameId: channelName}, teams: {ABBR: channelName}, networks: {NAME: channelName}}.
    */
   async find(game, rules = {}) {
-    await this.refresh();
+    // The channel list is small and quick; the guide can be tens of MB. Channels named after the game ("NFL | NYG/PHI")
+    // are found from the list alone, so the first game plays without waiting for the guide.
+    await this.refreshList();
+    const guide = this.refreshGuide();
     const named = n => n && this.list.channels.find(c => c.name === n);
     const pick = named((rules.games || {})[game.id]);
     if (pick) return { ...pick, via: 'your pick' };
     const teamRule = named((rules.teams || {})[game.home.abbr]) || named((rules.teams || {})[game.away.abbr]);
     if (teamRule) return { ...teamRule, via: 'team rule' };
+    if (!this.guide) {
+      const early = this.match(game);
+      if (early) return early;
+      await guide.catch(() => {});
+    }
     const found = this.match(game);
     if (found) return found;
     const net = String(game.network || '').toUpperCase();
@@ -61,29 +69,43 @@ export class Iptv {
   match(game) {
     const m = matcher(game);
     const hits = new Set();
-    for (const [id, text] of this.guide.now) if (!text.includes('replay') && !otherSport(text) && m.names(text)) hits.add(id);
+    for (const [id, text] of this.guide ? this.guide.now : []) if (!text.includes('replay') && !otherSport(text) && m.names(text)) hits.add(id);
     // Channels named after the matchup ("NFL | CAR/GB", "NFL 05: DAL @ PHI", "Cowboys vs Eagles") count too, guide or not.
-    // Among equal matches: the main broadcast first, then copies of it (4K), then alternate feeds (Prime Vision,
-    // ManningCast, Spanish...), which are often another show or a placeholder slate; then the plainest name, then the
-    // highest channel number.
+    // Never on its own: alternate feeds (Prime Vision, ManningCast, Spanish...), often another show or a placeholder
+    // slate. 4K copies only where they play (allow4k: a Shield), and there ahead of the plain feed; elsewhere never.
+    // You can still pick any of them for a game yourself. Among equal matches: the plainest name, then the highest
+    // channel number.
     const found = [];
     for (const ch of this.list.channels) {
       const lower = ch.name.toLowerCase();
       if (otherSport(`${lower} ${ch.group.toLowerCase()}`)) continue;   // "NCAAM | UIW/OKST": Cardinals at Cowboys, but college
+      const k4 = HEAVY.test(lower);
+      if (ALT_FEED.test(lower) || (k4 && !this.allow4k)) continue;
       const named = m.names(lower) || (/nfl/.test(lower) && m.codes(lower));
       if (!(ch.id && hits.has(ch.id)) && !named) continue;
       const tier = /nfl/.test(ch.group.toLowerCase()) || /^nfl\b/.test(lower) ? 0 : /network|local/.test(ch.group.toLowerCase()) ? 1 : 2;
-      found.push({ ch, key: [tier, ALT_FEED.test(lower) ? 2 : HEAVY.test(lower) ? 1 : 0, lower.length, -ch.no] });
+      found.push({ ch, key: [tier, k4 ? 0 : 1, lower.length, -ch.no] });
     }
     found.sort((a, b) => { for (let i = 0; i < a.key.length; i++) if (a.key[i] !== b.key[i]) return a.key[i] - b.key[i]; return 0; });
     const best = found[0] && found[0].ch;
     return best ? { ...best, via: hits.has(best.id) ? 'guide' : 'channel name' } : null;
   }
 
-  async refresh() {
-    const now = Date.now();
-    if (!this.guide || now - this.guide.at > GUIDE_AGE) this.guide = { at: now, now: parseGuide(await text(this.guideUrl), now) };
-    if (!this.list || now - this.list.at > GUIDE_AGE) this.list = { at: now, channels: parseM3u(await text(this.listUrl)) };
+  /** Channel list and guide, both loaded. */
+  async refresh() { await Promise.all([this.refreshList(), this.refreshGuide()]); }
+  refreshList() { return this.load('list', async () => ({ at: Date.now(), channels: parseM3u(await text(this.listUrl)) })); }
+  refreshGuide() { return this.load('guide', async () => { const t = await text(this.guideUrl), now = Date.now(); return { at: now, now: parseGuide(t, now) }; }); }
+
+  /**
+   * this[key], loaded once at a time (two callers share one download). Missing: waits for it. Older than GUIDE_AGE:
+   * the old copy carries on while the new one loads.
+   */
+  load(key, get) {
+    const have = this[key], busy = `${key}Loading`;
+    if (have && Date.now() - have.at <= GUIDE_AGE) return Promise.resolve();
+    if (!this[busy]) this[busy] = get().then(v => { this[key] = v; }).finally(() => { this[busy] = null; });
+    if (have) { this[busy].catch(() => {}); return Promise.resolve(); }
+    return this[busy];
   }
 }
 

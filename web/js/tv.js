@@ -1,4 +1,4 @@
-import { loadRosters, espnPhotos, loadScoreboard, loadPoints, loadMatchups, statLine, winChance } from './data.js';
+import { loadRosters, espnPhotos, loadScoreboard, loadPoints, loadMatchups, statLine, winChance, settled } from './data.js';
 import { rankAll, AutoTune } from './engine.js';
 import { Sim } from './sim.js';
 import { Iptv, proxied } from './iptv.js';
@@ -39,6 +39,8 @@ const auto = new AutoTune({ cooldown: +settings.cooldown || 75 });
 auto.label = id => { const g = id && game(id); return g ? `${g.away.abbr} at ${g.home.abbr}` : ''; };
 let away = false;   // the TV app is in the background (Home pressed): AutoTune stops switching
 const iptv = Iptv.fromSettings(settings);
+// An NVIDIA Shield plays 4K feeds well, so it takes a game's 4K copy first; other boxes skip 4K copies.
+if (iptv) iptv.allow4k = /shield/i.test((native && native.model && native.model()) || '');
 let videoOn = false;
 let roster = null, sim = null, ranked = [], pointsNow = {}, week = null;
 const snapshots = [];       // live mode: scoreboards as they arrived, so the screen can run `delay` seconds behind
@@ -139,6 +141,9 @@ function allowUpdatesStep() {
 
 async function start() {
   if (!hasLeagues(settings) || params.has('setup')) { setupScreen(); return; }   // ?setup shows it for checking
+  // Your channel list starts loading now, alongside your leagues, so the first game can play the moment it's picked.
+  if (iptv && settings.mode !== 'sim') iptv.refreshList().catch(() => {});
+  const boardLoading = loadScoreboard().catch(() => ({ games: [] }));   // ESPN too, while your leagues load
   try {
     roster = await loadRosters(settings.sleeper, rosterOpts());
     espnPhotos({ ...roster.players, ...roster.opponents });   // headshots, in the background
@@ -148,7 +153,7 @@ async function start() {
   }
   const n = Object.keys(roster.players).length;
   $('#splashMsg').textContent = `${roster.user} · ${roster.teams.map(t => t.team).join(' · ')} · ${n} players`;
-  const board = await loadScoreboard().catch(() => ({ games: [] }));
+  const board = await boardLoading;
   week = board.week;
   if (settings.mode === 'sim') {
     sim = new Sim(roster.players, board.games);
@@ -378,7 +383,7 @@ function matchupsNow() {
     const clock = m ? +m[1] * 60 + +m[2] : 900;
     return Math.max(0, Math.min(1, ((4 - Math.min(g.period, 4)) * 900 + clock) / 3600));
   };
-  return last.list.map(m => ({ ...m, win: winChance(m, teamOf, leftFor) }));
+  return last.list.map(m => ({ ...m, win: winChance(m, teamOf, leftFor), settled: settled(m, teamOf, leftFor) }));
 }
 /** Practice: your starters' simulated points against a made-up opponent. */
 function simMatchups() {
@@ -501,6 +506,7 @@ function liveClock(gameId) {
 // ---- The broadcast's own clock, read off the picture by the TV app (ClockReader.java) every 2 seconds.
 let readClock = null;          // last reading {game, channel, period, secs, at, running}
 const delaySamples = {};       // channel -> recent delay estimates (seconds)
+const clockChecks = [];        // our clock vs the broadcast's, newest first
 let delaysSavedAt = 0;
 
 // A commercial: no network logo in the corner and no score bug, two readings in a row (about 4 s). The logo stays up
@@ -524,6 +530,10 @@ window.ftvClock = (period, secs, at, logo) => {
   // Running when the clock went down by about the time between readings.
   const running = !!prev && Math.abs((prev.secs - secs) - (at - prev.at) / 1000) <= 1.5 && prev.secs > secs;
   readClock = { game: g.id, channel: tunedChannel.name, period, secs, at, running };
+  // For checking: the clock this TV shows from ESPN against the one on the broadcast at the same moment (+: ours is
+  // ahead of the picture, that is, lower), the last 60 readings, for the phone's diagnostics and our tests.
+  clockChecks.unshift({ ch: tunedChannel.name, q: period, read: secs, ours: +expect[1] * 60 + +expect[2], diff: secs - (+expect[1] * 60 + +expect[2]), running, delay: delayFor(g.id), at: Math.round(at) });
+  clockChecks.length = Math.min(clockChecks.length, 60);
   if (running) learnDelay(g.id, tunedChannel.name, period, secs, at);
 };
 
@@ -588,11 +598,14 @@ function currentGames() {
   const pick = d => { const at = Date.now() - d * 1000; let best = snapshots[0]; for (const s of snapshots) if (s.t <= at) best = s; return best; };
   const base = pick(settings.delay);
   if (!base) return [];
+  // Each game as its channel shows it now, plus what ESPN has already said about it that the picture hasn't reached
+  // (ahead: newer copies of the game, oldest first): AutoTune reads a punt or a turnover coming before it tunes in.
   return base.games.map(g => {
-    const d = delayFor(g.id);
-    if (d === settings.delay) return g;
-    const s = pick(d);
-    return (s && s.games.find(x => x.id === g.id)) || g;
+    const d = delayFor(g.id), s = d === settings.delay ? base : pick(d);
+    const now = (s && s.games.find(x => x.id === g.id)) || g;
+    const ahead = [];
+    for (const later of snapshots) if (later.t > s.t) { const x = later.games.find(y => y.id === g.id); if (x) ahead.push(x); }
+    return { ...now, ahead };
   });
 }
 
@@ -608,11 +621,11 @@ function loop() {
     if (g.state !== 'in' || !g.sit || !g.sit.lastPlay) continue;
     const key = g.sit.lastPlay.text, seen = lastPlaySeen[g.id];
     if (!seen || seen.key !== key) lastPlaySeen[g.id] = { key, at: Date.now() };
-    else if (Date.now() - seen.at > 75e3 && !g.onBreak) { g.onBreak = true; g.breakWhy = 'No play for a while'; g.value *= 0.25; }
+    else if (Date.now() - seen.at > 75e3 && !g.onBreak) { g.onBreak = true; g.breakWhy = 'No play for a while'; g.value *= 0.25; g.onField *= 0.25; }
   }
   const cur = game(auto.current);
   if (cur && cur.state === 'in' && onCommercial(cur.id)) {
-    if (!cur.onBreak) cur.value *= 0.25;
+    if (!cur.onBreak) { cur.value *= 0.25; cur.onField *= 0.25; }
     cur.onBreak = true; cur.breakWhy = 'Commercial';
     auto.adOn = cur.id;   // a real ad: leave without the usual wait
   } else auto.adOn = null;
@@ -920,13 +933,13 @@ function publish() {
     redZone: !!redZone, redZoneOpen: !!redZoneRow(), view,
     version: native ? native.version() : 'browser', update: update && { versionName: update.versionName, notes: update.notes }, channel: tunedChannel && tunedChannel.name,
     pending: auto.pending && { to: auto.pending.to, endsAt: auto.pending.endsAt, why: auto.pending.why },
-    playStats, popupsWaiting: popups.length, ad: { misses: bugMisses, game: bugGame, on: auto.adOn }, readClock, channelDelays: settings.channelDelays || {}, delaySamples,
+    playStats, popupsWaiting: popups.length, ad: { misses: bugMisses, game: bugGame, on: auto.adOn }, readClock, channelDelays: settings.channelDelays || {}, delaySamples, clockChecks,
     matchups: matchupsNow(), channels: channelMap, channelNames, iptv: !!iptv, bigPlays: bigPlays.map(b => ({ game: b.game, at: b.at, who: b.who ? b.who.short : b.team, td: b.td, yards: b.yards })),
     log: auto.log.slice(0, 12), delay: settings.delay, away, rosterAt, out: prefs.out,
     hideSpoilers: settings.hideSpoilers !== false, rewind: rewindOn(), tunnel: tunnelOn(), waiting: !!(auto.pending && auto.pending.waiting),
     games: ranked.map(g => ({ id: g.id, away: g.away, home: g.home, state: g.state, statusName: g.statusName, period: g.period,
       clock: g.clock, start: g.start, network: g.network, sit: g.sit, onBreak: g.onBreak, breakWhy: g.breakWhy, signal: g.signal,
-      value: g.value, fav: g.fav, skip: g.skip, players: g.players })),
+      value: g.value, onField: g.onField, endsWhy: g.endsWhy, kickComing: g.kickComing, fav: g.fav, skip: g.skip, players: g.players })),
   });
 }
 
@@ -1048,7 +1061,9 @@ function renderMatchups() {
     // The bar is your live chance of winning (the number on the right of the league name), not the points split.
     const win = m.win != null ? Math.round(m.win * 100) : Math.round(m.me + m.them > 0 ? share : 50);
     // 5. Settled either way says so (the win chance shows how close the rest are).
-    const badge = m.win != null && win >= 99 ? ['clinch', 'CLINCHED'] : m.win != null && win <= 1 ? ['miracle', 'NEED A MIRACLE'] : [win >= 50 ? 'up' : 'down', `${win}% WIN`];
+    // CLINCHED only when it's settled for real (a 99% forecast at 1 o'clock isn't); practice has no settled, it goes by the chance.
+    const won = 'settled' in m ? m.settled === 'won' : win >= 99, lost = 'settled' in m ? m.settled === 'lost' || win < 1 : win <= 1;
+    const badge = m.win != null && won ? ['clinch', 'CLINCHED'] : m.win != null && lost ? ['miracle', 'NEED A MIRACLE'] : [win >= 50 ? 'up' : 'down', `${win}% WIN`];
     return `<div><div class="lg">${esc(m.league.toUpperCase())}<b class="wp ${badge[0]}">${badge[1]}</b></div>
       <div class="ln"><span class="a">${esc(m.team)}</span><span class="s ${m.me >= m.them ? 'win' : 'lose'}"><span class="n">${hot.has(m.league) ? '<i class="fire" title="15+ points in 10 minutes">🔥</i>' : ''}${rollHtml('me:' + m.league, m.me, false)}</span></span><span class="v">vs</span>
         <span class="s ${m.them > m.me ? 'win' : 'lose'}">${rollHtml('them:' + m.league, m.them, false)}</span><span class="b">${esc(m.opp)}</span>
@@ -1493,7 +1508,7 @@ setInterval(() => {
 // isn't the one on screen, so these come at once (the one on screen waits the popup delay); OK watches it.
 const dangerSeen = {};   // game + possession + quarter -> red zone already called
 function dangerFrom(g, before, text, at) {
-  if (settings.dangerAlerts !== true || !roster.opponents) return;   // off unless you turn them on (busy)
+  if (settings.dangerAlerts === false || !roster.opponents) return;   // on unless you turn them off (Everything is the default)
   const opps = Object.values(roster.opponents).filter(p => !roster.players[p.id] && p.leagues.some(l => l.starter)
     && (p.team === g.home.abbr || p.team === g.away.abbr));
   if (!opps.length) return;
@@ -1670,7 +1685,7 @@ function showPopups() {
       continue;
     }
     // Your player's touchdown in another game (Settings): a small popup (default), the full banner, or nothing.
-    const away = view === 'scores' && settings.tdAway === 'full' ? 'small' : settings.tdAway || 'small';   // Scores only: never the banner
+    const away = view === 'scores' && settings.tdAway !== 'small' && settings.tdAway !== 'off' ? 'small' : settings.tdAway || 'full';   // Scores only: never the banner
     if (p.kind !== 'alert' && p.td && away === 'off') continue;
     const el = document.createElement('div');
     el.className = 'pop';
@@ -1750,7 +1765,9 @@ const TOUR = [
   { key: '▲', target: '#atTag', title: 'Up: AutoTune on / off',
     text: 'AutoTune switches to the game that matters most to your lineup. Press Up to stay where you are; Up again turns it back on. Before a switch, a 5 second countdown shows: OK or Back cancels it.' },
   { key: '▼', target: '#radar', radar: true, right: true, title: 'Down: every game',
-    text: 'All the live games, yours first. Up and Down move, OK watches a game (the On screen row at the top switches between Full, Scores only and Clean), ▶ hearts it (AutoTune favors hearted games in close calls), Back closes the list. A game you pick stays on for 45 seconds (less if it goes to a commercial), then AutoTune takes over again. To stay on it, turn AutoTune off with Up.' },
+    text: 'All the live games, yours first. Up and Down move, OK watches a game, ▶ hearts it (AutoTune favors hearted games in close calls), Back closes the list. A game you pick stays on for 45 seconds (less if it goes to a commercial), then AutoTune takes over again. To stay on it, turn AutoTune off with Up.' },
+  { key: 'OK', target: '#radar .viewrow', radar: true, right: true, title: "Top of the list: what's on screen",
+    text: "OK on the On screen row switches what sits over the game. Full: everything. Scores only: just your leagues' scores, with small popups for your big plays (NFL RedZone switches to it by itself). Clean: nothing but the game, and AutoTune stays put. The phone remote has the same switch." },
   { key: '◀ ▶', target: '#bug .in', title: 'Left: rewind · Right: live',
     text: 'Left jumps back 10 seconds in the game you\'re watching (again for more, up to a minute). Right goes back to live. Only the game on screen can be rewound: FantasyTV keeps its last minute from when you tuned in.' },
   { key: 'OK', target: '#pops .demo', demo: 1, title: 'OK on a popup',
