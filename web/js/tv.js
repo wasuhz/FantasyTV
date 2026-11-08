@@ -699,6 +699,7 @@ function loop() {
     const key = g.sit.lastPlay.text, seen = lastPlaySeen[g.id];
     if (!seen || seen.key !== key) lastPlaySeen[g.id] = { key, at: Date.now() };
     else if (Date.now() - seen.at > 75e3 && !g.onBreak) { g.onBreak = true; g.breakWhy = 'No play for a while'; g.value *= 0.25; g.onField *= 0.25; }
+    g.playAgo = (Date.now() - lastPlaySeen[g.id].at) / 1000;   // seconds since its last new play (as your screen has it)
   }
   const cur = game(auto.current);
   // A missing score bug alone is often a replay, a sideline shot or a graphic, mid-drive. Believe it at once when ESPN
@@ -1404,6 +1405,8 @@ function radarList() {
   return [...(up ? [up] : []), { view: true, id: 'view' }, ...(rz ? [rz] : []), ...live.filter(mine), ...live.filter(g => !mine(g)), ...ranked.filter(g => g.state === 'pre'), ...chk];
 }
 const RADAR_ROWS = 5;   // shown at once; the list scrolls with the focus
+const DOUBLE_OK_MS = 350;   // OK twice within this hearts a game in the list; once watches it after it
+let okWait = null;          // {id, t}: a first OK on a game, waiting to see if a second one comes
 
 function renderRadar() {
   const list = radarList();
@@ -1907,7 +1910,7 @@ const TOUR = [
   { key: '▲', target: '#atTag', title: 'Up: AutoTune on / off',
     text: 'AutoTune switches to the game that matters most to your lineup. Press Up to stay where you are; Up again turns it back on. Before a switch, a 5 second countdown shows: OK or Back cancels it.' },
   { key: '▼', target: '#radar', radar: true, right: true, title: 'Down: every game',
-    text: 'All the live games, yours first. Up and Down move, OK watches a game, ▶ hearts it (AutoTune favors hearted games in close calls), Back closes the list. A game you pick stays on for 45 seconds (less if it goes to a commercial), then AutoTune takes over again. To stay on it, turn AutoTune off with Up.' },
+    text: 'All the live games, yours first. Up and Down move, OK watches a game, ▶ (or OK twice) hearts it (AutoTune favors hearted games in close calls), Back closes the list. A game you pick stays on for 45 seconds (less if it goes to a commercial), then AutoTune takes over again. To stay on it, turn AutoTune off with Up.' },
   { key: 'OK', target: '#radar .viewrow', radar: true, right: true, title: "Top of the list: what's on screen",
     text: "OK on the On screen row switches what sits over the game. Full: everything. Scores only: just your leagues' scores, with small popups for your big plays (NFL RedZone switches to it by itself). Clean: nothing but the game, and AutoTune stays put. The phone remote has the same switch." },
   { key: '◀ ▶', target: '#bug .in', title: 'Left: rewind · Right: live',
@@ -2044,15 +2047,36 @@ function onKey(e) {
   else if (k === 'ArrowRight' && list[radarFocus] && !list[radarFocus].redzone && !list[radarFocus].upd && !list[radarFocus].view && !list[radarFocus].chk) handle({ type: 'heart', id: list[radarFocus].id });
   else if (k === 'Enter' && list[radarFocus] && list[radarFocus].chk) handle({ type: 'checkUpdate' });   // the list stays open
   else if (k === 'Enter' && list[radarFocus] && list[radarFocus].view) cycleView();   // the list stays open to switch again
+  else if (k === 'Enter' && list[radarFocus] && !list[radarFocus].upd && !list[radarFocus].redzone) {
+    // A game: OK twice quickly hearts it (like ▶) and stays in the list; once watches it, after a moment's wait for
+    // a second press.
+    const g = list[radarFocus];
+    if (okWait && okWait.id === g.id) {
+      clearTimeout(okWait.t); okWait = null;
+      handle({ type: 'heart', id: g.id });
+      toast(prefs.hearts[g.id] ? `♥ ${g.away.abbr} at ${g.home.abbr}: AutoTune favors it` : `${g.away.abbr} at ${g.home.abbr}: heart removed`);
+    } else {
+      if (okWait) clearTimeout(okWait.t);
+      okWait = { id: g.id, t: setTimeout(() => {
+        okWait = null;
+        if (g.state === 'in') handle({ type: 'pick', id: g.id });
+        radarOpen = false;
+        $('#radar').classList.remove('on');
+        showTicker();   // All Games kept "You're watching" up; it goes after its usual 12 s
+      }, DOUBLE_OK_MS) };
+    }
+  }
   else if (k === 'Enter' && list[radarFocus]) {
     if (list[radarFocus].upd) startUpdate();
     else if (list[radarFocus].redzone) watchRedZone();
-    else if (list[radarFocus].state === 'in') handle({ type: 'pick', id: list[radarFocus].id });
     radarOpen = false;
-    showTicker();   // All Games kept "You're watching" up; it goes after its usual 12 s
+    showTicker();
   }
   else if (k === 'p') handle({ type: 'pause', on: !auto.paused });
-  else if (k === 'Escape' || k === 'Backspace' || k === 'GoBack') { radarOpen = false; $('#ticker').classList.remove('on'); }
+  else if (k === 'Escape' || k === 'Backspace' || k === 'GoBack') {
+    if (okWait) { clearTimeout(okWait.t); okWait = null; }   // Back right after OK: stay where you are
+    radarOpen = false; $('#ticker').classList.remove('on');
+  }
   $('#radar').classList.toggle('on', radarOpen);
   renderRadar();
   e.preventDefault();

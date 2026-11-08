@@ -19,7 +19,9 @@ import java.util.List;
 final class Timeshift {
     private static final String TAG = "FantasyTVTimeshift";
     private static final long KEEP_MS = 60_000;
-    private static final long MAX_BYTES = 120L << 20;
+    // At most 120 MB, and never more than a third of the memory Android gives the app (about 192 MB on a Shield without
+    // largeHeap): a high-bitrate feed then rewinds less far instead of running the app out of memory.
+    private static final long MAX_BYTES = Math.min(120L << 20, Runtime.getRuntime().maxMemory() / 3);
 
     private static final class Chunk {
         final long t; final byte[] data; final long seq;
@@ -62,9 +64,19 @@ final class Timeshift {
         return chunks.isEmpty() ? 0 : (int) ((chunks.getLast().t - chunks.getFirst().t) / 1000);
     }
 
+    /**
+     * Bumped on every reconnect to the provider. Many IPTV servers start a new connection with the last 10–15 seconds
+     * again: stitched onto the buffer, the player saw the game jump back (frozen picture, earlier plays again). So a
+     * reconnect starts the buffer over and ends what's being served, and the player picks up again at live.
+     */
+    private long epoch;
+
     private void read(String u) {
+        boolean first = true;
         while (running && u.equals(url)) {
             HttpURLConnection c = null;
+            if (!first) synchronized (this) { chunks.clear(); bytes = 0; epoch++; notifyAll(); Log.i(TAG, "reconnected: buffer starts over"); }
+            first = false;
             try {
                 c = (HttpURLConnection) new URL(u).openConnection();
                 c.setConnectTimeout(10_000);
@@ -104,9 +116,10 @@ final class Timeshift {
      */
     void serve(OutputStream out, int secondsBack) throws IOException {
         String mine;
-        long seq;
+        long seq, myEpoch;
         synchronized (this) {
             mine = url;
+            myEpoch = epoch;
             // Wait briefly for the first data of a fresh channel.
             long until = System.currentTimeMillis() + 10_000;
             while (chunks.isEmpty() && running && System.currentTimeMillis() < until) {
@@ -121,6 +134,7 @@ final class Timeshift {
             List<byte[]> batch = new ArrayList<>();
             synchronized (this) {
                 if (!running || mine == null || !mine.equals(url)) return;
+                if (epoch != myEpoch) return;   // the provider reconnected: end here, the player reconnects at live
                 long first = chunks.isEmpty() ? seq : chunks.getFirst().seq;
                 if (seq < first) seq = first;   // fell behind the buffer: carry on from its start
                 for (Chunk ch : chunks) if (ch.seq >= seq) batch.add(ch.data);

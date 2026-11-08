@@ -52,17 +52,28 @@ final class StreamTap implements DataSink {
     /** Forget the old channel's bytes (a new channel starts). */
     synchronized void reset() { written = 0; }
 
-    /** The newest TAKE bytes, oldest first, or null while there aren't enough yet. */
-    private synchronized byte[] latest() {
-        if (written < TAKE) return null;
-        byte[] out = new byte[TAKE];
-        long start = written - TAKE;
-        for (int i = 0; i < TAKE; ) {
-            int at = (int) ((start + i) % RING), n = Math.min(TAKE - i, RING - at);
-            System.arraycopy(ring, at, out, i, n);
-            i += n;
+    private byte ringAt(long pos) { return ring[(int) (pos % RING)]; }
+
+    /**
+     * The newest TAKE bytes into the scratch file, straight from the ring and starting on an MPEG-TS packet boundary
+     * (three sync bytes 188 apart): no copy in memory (an 8 MB array every 3 s, beside the rewind buffer, ran a Shield
+     * out of memory). False while there isn't enough yet, or no packet start.
+     */
+    private synchronized boolean latestToFile() throws IOException {
+        if (written < TAKE) return false;
+        long start = written - TAKE, from = -1;
+        for (long p = start; p + 2 * TS < start + 64 * TS; p++)
+            if (ringAt(p) == 0x47 && ringAt(p + TS) == 0x47 && ringAt(p + 2 * TS) == 0x47) { from = p; break; }
+        if (from < 0) return false;
+        long len = (written - from) / TS * TS;
+        try (FileOutputStream f = new FileOutputStream(scratch)) {
+            for (long done = 0; done < len; ) {
+                int at = (int) ((from + done) % RING), n = (int) Math.min(len - done, RING - at);
+                f.write(ring, at, n);
+                done += n;
+            }
         }
-        return out;
+        return true;
     }
 
     /**
@@ -70,17 +81,10 @@ final class StreamTap implements DataSink {
      * decodable). Blocking: call it off the main thread.
      */
     Bitmap grab(int width, int height) {
-        byte[] data = latest();
-        if (data == null) return null;
-        // Start on a packet boundary: three sync bytes 188 apart.
-        int from = -1;
-        for (int i = 0; i + 2 * TS < Math.min(data.length, 64 * TS); i++)
-            if (data[i] == 0x47 && data[i + TS] == 0x47 && data[i + 2 * TS] == 0x47) { from = i; break; }
-        if (from < 0) return null;
-        int len = (data.length - from) / TS * TS;
         MediaMetadataRetriever mmr = new MediaMetadataRetriever();
         try {
-            try (FileOutputStream f = new FileOutputStream(scratch)) { f.write(data, from, len); }
+            if (!latestToFile()) return null;
+            long len = scratch.length();
             mmr.setDataSource(scratch.getAbsolutePath());
             long durUs = 0;
             String d = mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION);

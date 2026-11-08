@@ -292,19 +292,17 @@ export class AutoTune {
     // Never sit on an ad while football is on somewhere: when none of your games is playing, any live game that is
     // (yours first, then the most exciting), until one of yours comes back.
     let filler = false;
-    if (breakOk && (!best || best.onBreak || best.id === cur.id)) {
-      // Football right now, not a drive that's about to end (a punt or kick coming, or over in ESPN's newer data):
-      // that's a break of its own a few seconds in. Your starters with the ball first.
-      const playing = live.filter(g => g.id !== cur.id && !g.onBreak && !g.endsWhy && !g.kickComing && ok(g))
-        .sort((a, b) => b.onField - a.onField || b.fav - a.fav || b.excite - a.excite);   // then hearts and favourite teams
+    // Just left a commercial for a fill-in game and landed on another (the two-minute warnings put every game in ads at
+    // once): stay put for 2 minutes rather than hop from ad to ad; only your own starters with the ball move it.
+    const chained = now - (this.adHopAt || 0) < 120e3;
+    if (breakOk && !chained && (!best || best.onBreak || best.id === cur.id)) {
+      // Football right now: a play in the last 45 s (no break reported isn't enough: ESPN can be late to say so), and
+      // not a drive that's about to end (a punt or kick coming, or over in ESPN's newer data). Your starters with the
+      // ball first, then hearts and favourite teams, then the most exciting.
+      const playing = live.filter(g => g.id !== cur.id && !g.onBreak && !g.endsWhy && !g.kickComing && ok(g) && (g.playAgo == null || g.playAgo < 45))
+        .sort((a, b) => b.onField - a.onField || b.fav - a.fav || b.excite - a.excite);
       if (playing.length) { best = playing[0]; filler = best.onField <= 0; }
-      // Every game on a break and yours on a real ad for 30 s: the one whose break began longest ago (a minute or more)
-      // is likeliest back first. Not halftime.
-      else if (seenAd && (cur.breakFor || 0) >= 30) {
-        const back = live.filter(g => g.id !== cur.id && ok(g) && g.statusName !== 'STATUS_HALFTIME' && (g.breakFor || 0) >= 60)
-          .sort((a, b) => b.breakFor - a.breakFor)[0];
-        if (back) return this.ask(back, `${back.away.abbr} at ${back.home.abbr}, back sooner (${cur.away.abbr}-${cur.home.abbr}: commercial)`, now);
-      }
+      // Every game on a break: stay on this one. Guessing which ad ends first only finds another ad.
     }
     if (!best || best.id === cur.id) return {};
     const cooled = now - this.lastSwitch >= this.opts.cooldown * 1000;
@@ -315,6 +313,7 @@ export class AutoTune {
     else if (cur.onField <= 0 && best.onField > 0 && !best.onBreak && now - this.lastSwitch >= 20e3) why = whyBetter(best);
     else if (cooled && best.value > cur.value * this.opts.margin + 0.05) why = whyBetter(best);
     if (!why) return {};
+    if (filler) this.adHopAt = now;   // left a break for a game with none of yours: no second hop for 2 minutes
     return this.ask(best, why, now);
   }
 
