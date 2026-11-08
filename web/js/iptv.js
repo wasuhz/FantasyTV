@@ -94,7 +94,12 @@ export class Iptv {
   /** Channel list and guide, both loaded. */
   async refresh() { await Promise.all([this.refreshList(), this.refreshGuide()]); }
   refreshList() { return this.load('list', async () => ({ at: Date.now(), channels: parseM3u(await text(this.listUrl)) })); }
-  refreshGuide() { return this.load('guide', async () => { const t = await text(this.guideUrl), now = Date.now(); return { at: now, now: parseGuide(t, now) }; }); }
+  refreshGuide() {
+    return this.load('guide', async () => {
+      const now = Date.now();
+      return { at: now, now: await guideNow(this.guideUrl, now) };
+    });
+  }
 
   /**
    * this[key], loaded once at a time (two callers share one download). Missing: waits for it. Older than GUIDE_AGE:
@@ -152,6 +157,21 @@ async function text(url) {
   const r = await fetch(url.startsWith('/') ? url : proxied(url));   // the app's own (Stalker) or through its proxy
   if (!r.ok) throw new Error(`IPTV ${r.status}`);
   return r.text();
+}
+
+/**
+ * What's on the air now in the guide (Map: channel id -> text), read in a background worker (guide-worker.js) as it
+ * downloads: parsing a 60 MB guide here froze the TV's controls for 25 s. Here only where workers can't run.
+ */
+function guideNow(url, now) {
+  const src = url.startsWith('/') ? url : proxied(url);
+  if (typeof Worker === 'undefined') return text(url).then(t => parseGuide(t, now));
+  return new Promise((resolve, reject) => {
+    const w = new Worker(new URL('./guide-worker.js', import.meta.url));
+    w.onmessage = ({ data }) => { w.terminate(); data.error ? reject(new Error(data.error)) : resolve(new Map(Object.entries(data.now))); };
+    w.onerror = e => { w.terminate(); reject(new Error(e.message || 'guide worker failed')); };
+    w.postMessage({ url: new URL(src, location.href).href, now });
+  });
 }
 
 function xmltvTime(s) {

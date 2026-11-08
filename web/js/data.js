@@ -462,15 +462,17 @@ export function points(stats, scoring) {
 export function statLine(pos, s) {
   if (!s) return '';
   const n = k => Math.round(s[k] || 0);
+  const yd = k => (n(k) < 0 ? `−${-n(k)}` : `${n(k)}`);   // a real minus: "−2", not "-2" run into a dash
   const parts = [];
   if (pos === 'QB' || n('pass_att')) {
-    if (n('pass_att')) parts.push(`${n('pass_cmp')}/${n('pass_att')}`, `${n('pass_yd')} YD`);
+    if (n('pass_att')) parts.push(`${n('pass_cmp')}/${n('pass_att')}`, `${yd('pass_yd')} YD`);
     if (n('pass_td')) parts.push(`${n('pass_td')} TD`);
     if (n('pass_int')) parts.push(`${n('pass_int')} INT`);
   }
-  // A QB's line is long already: just his rushing yards. Everyone else: carries and yards.
-  if (n('rush_att')) parts.push(pos === 'QB' ? `${n('rush_yd')} RUSH` : `${n('rush_att')}-${n('rush_yd')} RUSH`);
-  if (n('rec_tgt') || n('rec')) parts.push(`${n('rec')}/${n('rec_tgt')} REC · ${n('rec_yd')} YD`);
+  // A QB's line is long already: just his rushing yards. Everyone else: carries and yards, like catches ("3 RUSH · 12 YD";
+  // "3-12" read "3--2" with lost yards).
+  if (n('rush_att')) parts.push(pos === 'QB' ? `${yd('rush_yd')} RUSH YD` : `${n('rush_att')} RUSH · ${yd('rush_yd')} YD`);
+  if (n('rec_tgt') || n('rec')) parts.push(`${n('rec')}/${n('rec_tgt')} REC · ${yd('rec_yd')} YD`);
   if (pos !== 'QB' && n('rush_td') + n('rec_td')) parts.push(`${n('rush_td') + n('rec_td')} TD`);
   if (pos === 'K' && (n('fga') || n('xpa'))) parts.push(`FG ${n('fgm')}/${n('fga')}`, `XP ${n('xpm')}/${n('xpa')}`);
   if (n('fum_lost')) parts.push(`${n('fum_lost')} FUM`);   // so a negative score says why
