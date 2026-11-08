@@ -255,7 +255,7 @@ public class MainActivity extends Activity {
                 return;
             }
             newer = r;
-            main.post(() -> web.evaluateJavascript("window.ftvUpdate && ftvUpdate(" + r + ")", null));
+            main.post(() -> web.evaluateJavascript("window.ftvUpdate && ftvUpdate(" + r + "," + asked + ")", null));
         }, "UpdateCheck").start();
     }
 

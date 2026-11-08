@@ -175,7 +175,7 @@ async function start() {
   setTimeout(() => $('#splash').classList.add('gone'), 1400);
   setInterval(loop, 1000);
   setInterval(countdownFrame, 100);
-  setInterval(pollCommands, 700);
+  setInterval(pollCommands, 300);   // phone taps land within 0.3 s (a request to the TV itself: cheap)
   loop();
 }
 
@@ -838,9 +838,11 @@ window.ftvRewound = secs => {
 
 // ---- Updates (TV app): a newer release on GitHub shows a card; OK installs it, Back puts it off until next time.
 let update = null, updateCardUntil = 0, installing = false;
-window.ftvUpdate = release => {
+window.ftvUpdate = (release, asked) => {
   update = release;
   if (installing) return;   // already downloading or on the installer screen: no card over it
+  // You asked (Check for updates): install it now, whatever the automatic-update setting waits for.
+  if (asked && native) { startUpdate(); return; }
   if (settings.autoUpdate) return;   // automatic: no card; it installs at a quiet moment (below)
   updateCardUntil = Date.now() + 30e3;
   $('#update').innerHTML = `<b>Update available · FantasyTV ${esc(release.versionName)}</b>`
@@ -913,8 +915,11 @@ window.ftvPlayer = state => {
 };
 
 // ---- commands from the phone
+let polling = false;
 async function pollCommands() {
-  for (const c of await link.commands()) handle(c);
+  if (polling) return;   // the last one is still out (a slow moment): no pile-up
+  polling = true;
+  try { for (const c of await link.commands()) handle(c); } finally { polling = false; }
 }
 
 function handle(c) {
