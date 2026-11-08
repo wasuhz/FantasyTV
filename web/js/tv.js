@@ -1394,7 +1394,9 @@ function radarList() {
   const rz = redZoneRow();
   // An update waiting (the card was put off or missed): first in the list, OK installs it.
   const up = update && !installing && native ? { upd: true, id: 'update' } : null;
-  return [...(up ? [up] : []), { view: true, id: 'view' }, ...(rz ? [rz] : []), ...live.filter(mine), ...live.filter(g => !mine(g)), ...ranked.filter(g => g.state === 'pre')];
+  // Last: this version, and OK to look for a newer one now.
+  const chk = native && !up ? [{ chk: true, id: 'check' }] : [];
+  return [...(up ? [up] : []), { view: true, id: 'view' }, ...(rz ? [rz] : []), ...live.filter(mine), ...live.filter(g => !mine(g)), ...ranked.filter(g => g.state === 'pre'), ...chk];
 }
 const RADAR_ROWS = 5;   // shown at once; the list scrolls with the focus
 
@@ -1413,6 +1415,9 @@ function renderRadar() {
       <div class="top"><span class="tag" style="background:var(--lime);color:#04222a">NEW</span><span>Update FantasyTV</span></div>
       <div class="sub">Version ${esc(update.versionName)}${update.notes ? ` · ${esc(update.notes)}` : ''}</div>
       <div class="pl"><span class="muted">OK to install now</span></div></div>`;
+    if (g.chk) return `<div data-i="${i}" class="rg ${i === radarFocus ? 'focus' : ''}">
+      <div class="top"><span>FantasyTV ${esc(native.version())}</span></div>
+      <div class="pl"><span class="muted">${phone ? 'Tap' : 'OK'} to check for updates</span></div></div>`;
     if (g.redzone) return `<div data-i="${i}" class="rg rzrow ${redZone ? 'cur' : ''} ${i === radarFocus ? 'focus' : ''}">
       <div class="top"><span class="tag red">LIVE</span><span>NFL RedZone</span></div>
       <div class="sub">Every touchdown from every game, till 6:45 pm CT</div>
@@ -2031,7 +2036,8 @@ function onKey(e) {
   const list = radarList();
   if (k === 'ArrowDown') radarFocus = Math.min(list.length - 1, radarFocus + 1);
   else if (k === 'ArrowUp') radarFocus = Math.max(0, radarFocus - 1);
-  else if (k === 'ArrowRight' && list[radarFocus] && !list[radarFocus].redzone && !list[radarFocus].upd && !list[radarFocus].view) handle({ type: 'heart', id: list[radarFocus].id });
+  else if (k === 'ArrowRight' && list[radarFocus] && !list[radarFocus].redzone && !list[radarFocus].upd && !list[radarFocus].view && !list[radarFocus].chk) handle({ type: 'heart', id: list[radarFocus].id });
+  else if (k === 'Enter' && list[radarFocus] && list[radarFocus].chk) handle({ type: 'checkUpdate' });   // the list stays open
   else if (k === 'Enter' && list[radarFocus] && list[radarFocus].view) cycleView();   // the list stays open to switch again
   else if (k === 'Enter' && list[radarFocus]) {
     if (list[radarFocus].upd) startUpdate();

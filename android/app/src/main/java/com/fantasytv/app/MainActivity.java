@@ -115,9 +115,10 @@ public class MainActivity extends Activity {
                 main.post(() -> Toast.makeText(this, "FantasyTV couldn't open port " + TvServer.PORT, Toast.LENGTH_LONG).show());
             }
         }, "ServerStart").start();
-        // Updates: 20 s after opening (the page is up by then), then every 6 hours while it runs.
+        // Updates: 20 s after opening (the page is up by then), then every hour while it runs, and whenever it comes back
+        // to the screen (onStart): Fire TV and Android TV keep the app running behind Home, so "reopening" it isn't a start.
         main.postDelayed(new Runnable() {
-            @Override public void run() { checkForUpdate(); main.postDelayed(this, 6 * 3600_000L); }
+            @Override public void run() { checkForUpdate(false); main.postDelayed(this, 3600_000L); }
         }, 20_000);
     }
 
@@ -156,7 +157,7 @@ public class MainActivity extends Activity {
             });
         }
         /** Look for a newer release now; the page hears ftvUpdate(release) when there is one. */
-        @JavascriptInterface public void checkUpdate() { checkForUpdate(); }
+        @JavascriptInterface public void checkUpdate() { checkForUpdate(true); }
         /** Download and install the newer release; the page hears ftvUpdateStatus(message). */
         @JavascriptInterface public void installUpdate() {
             JSONObject r = newer;
@@ -238,11 +239,21 @@ public class MainActivity extends Activity {
 
     private volatile JSONObject newer;   // a newer release on GitHub, once found
 
-    /** Ask GitHub for a newer release (off the main thread); tell the page when there is one. */
-    private void checkForUpdate() {
+    private volatile long lastUpdateCheck;
+
+    /**
+     * Ask GitHub for a newer release (off the main thread); tell the page when there is one. Asked for (the game list's
+     * row, the phone's button): also says so when this is the newest.
+     */
+    private void checkForUpdate(boolean asked) {
+        lastUpdateCheck = System.currentTimeMillis();
         new Thread(() -> {
             JSONObject r = Updater.check();
-            if (r == null) return;
+            if (r == null) {
+                if (asked) main.post(() -> web.evaluateJavascript("window.ftvUpdateStatus && ftvUpdateStatus(" + JSONObject.quote(
+                        "You have the newest FantasyTV (" + BuildConfig.VERSION_NAME + ")") + ")", null));
+                return;
+            }
             newer = r;
             main.post(() -> web.evaluateJavascript("window.ftvUpdate && ftvUpdate(" + r + ")", null));
         }, "UpdateCheck").start();
@@ -324,7 +335,13 @@ public class MainActivity extends Activity {
     @Override protected void onResume() { super.onResume(); playback.resume(); sidePlayback.resume(); clock.setPaused(false); }
     /** Home or another app in front: AutoTune stops switching until you come back (RosterRadar does the same). */
     @Override protected void onStop() { super.onStop(); playback.suspend(); sidePlayback.suspend(); web.evaluateJavascript("window.ftvAway && ftvAway(true)", null); }
-    @Override protected void onStart() { super.onStart(); if (web != null) { playback.wake(); sidePlayback.wake(); web.evaluateJavascript("window.ftvAway && ftvAway(false)", null); } }
+    @Override protected void onStart() {
+        super.onStart();
+        if (web == null) return;
+        playback.wake(); sidePlayback.wake(); web.evaluateJavascript("window.ftvAway && ftvAway(false)", null);
+        // Back from Home: a fresh look for updates (not more than every 10 minutes).
+        if (lastUpdateCheck > 0 && System.currentTimeMillis() - lastUpdateCheck > 10 * 60_000L) checkForUpdate(false);
+    }
 
     @Override
     protected void onDestroy() {
