@@ -54,10 +54,12 @@ Same app and same code, **1790534**, on a TV or a phone. It's always the latest 
 |---|---|
 | **AutoTune** | Ranks every live drive by your starters on offense, field position and down; switches with a 5 s countdown you can cancel, and leaves commercials for a game that's playing |
 | **Stream-safe** | Learns each channel's delay behind ESPN (by reading the game clock off the picture); the score bug, popups and switching follow your stream, never ahead of it |
-| **Overlay** | Score bug, your players' cards with live points and headshots, your matchups with live win chances (two at a time, scrolling) |
-| **Moments** | Points popups, touchdown pop-outs, injury alerts for your starters, 🔥 for hot runs, final-score cards |
-| **Remote** | Up: AutoTune on/off · Down: all games · Left/Right: rewind 10 s / live · OK: replay or watch a popup's game. A first-launch tour explains it all |
-| **Phone remote** | Settings, channels per game, rewind, split screen, Practice Sunday (simulated games any day) |
+| **Overlay** | Score bug, your players' cards with live points and headshots, your matchups with live win chances (two at a time, scrolling). On Screen Overlay: Full, Scores only or Clean |
+| **Multiview** | 2 or 4 games at once: the game you're on plus the ones with the most of your starters. The outlined window has the sound (arrows move it); OK picks any window's game, or NFL RedZone. 2 games keep your overlay above and below; 4 games show a scores card in the middle (on/off). Split screen also opens by itself when two of your drives are hot |
+| **Clutch mode** | A close matchup with 4 or fewer starters left shows the margin and who's left, and AutoTune favors the games that decide it |
+| **Moments** | Points popups (bench players' big plays marked BENCH, opponents' marked OPPONENT), touchdown pop-outs, injury alerts, 🔥 for a player on fire right now (10+ points in 15 minutes), final-score cards |
+| **Remote** | Up: AutoTune on/off · Down: all games (On Screen Overlay and Multiview at the top; ▶ or OK twice hearts a game) · Left/Right: rewind 10 s / live · OK: replay or watch a popup's game. A first-launch tour explains it all |
+| **Phone remote** | Settings, channels per game, rewind, multiview (2 or 4 games), RedZone, Practice Sunday (simulated games any day) |
 | **On a phone** | Tap a popup to watch that game, tap AutoTune, swipe left/right to rewind / go live, ☰ for all games, ⚙ for settings; picture-in-picture when you leave the app |
 
 ## Privacy
